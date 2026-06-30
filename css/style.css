@@ -17,3 +17,5 @@ body { font-family: 'Segoe UI', sans-serif; margin: 0; line-height: 1.6; color: 
 /* Footer */
 footer { text-align: center; padding: 20px; background: #333; color: white; }
 
+/* Layout fix for pages with a header */
+header { margin-bottom: 20px; }
