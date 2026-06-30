@@ -1,19 +1,23 @@
-/* Reset basics */
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: sans-serif; line-height: 1.6; }
+/* Basic Reset */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: sans-serif; background-color: #f4f4f9; height: 100vh; display: flex; justify-content: center; align-items: center; }
 
-/* Navbar - The layout fix */
-.navbar { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    padding: 20px; 
-    background: #f8f9fa; 
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
-}
-.nav-links { list-style: none; display: flex; gap: 15px; }
-.nav-links a { text-decoration: none; color: #333; font-weight: bold; }
+/* Main Container */
+.container { width: 100%; max-width: 400px; height: 90vh; background: white; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
 
-/* Content padding to prevent touching the nav */
-.container { padding: 20px; }
+h1 { padding: 15px; font-size: 1.2rem; background: #007bff; color: white; text-align: center; }
+
+/* Chat Box Area */
+#chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+
+/* Message Bubbles */
+.msg { padding: 10px; border-radius: 15px; max-width: 80%; }
+.user { align-self: flex-end; background: #007bff; color: white; }
+.ai { align-self: flex-start; background: #e9ecef; color: black; }
+
+/* Input Area */
+.input-area { display: flex; padding: 10px; border-top: 1px solid #ddd; }
+#userInput { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+#sendBtn { margin-left: 5px; padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 5px; }
+
 
