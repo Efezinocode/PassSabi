@@ -1,25 +1,77 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PassSabi AI</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-    <div class="container">
-        <h1>PassSabi AI</h1>
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #0f172a;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
 
-        <p class="tagline">Your Smart Study Companion</p>
+.container {
+    max-width: 700px;
+    text-align: center;
+}
 
-        <p class="description">
-            PassSabi AI helps students prepare for Internal School Exams, WAEC, NECO, JAMB, GCE, NABTEB, and other examinations by providing instant explanations, practice questions, and smart learning support.
-        </p>
+h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
 
-        <button id="btn">Ask PassSabi AI</button>
-    </div>
+.tagline {
+    font-size: 1.8rem;
+    color: #38bdf8;
+    margin-bottom: 25px;
+}
 
-    <script src="js/script.js"></script>
-</body>
-</html>
+.description {
+    font-size: 1.2rem;
+    line-height: 1.8;
+    margin-bottom: 35px;
+}
+
+button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    font-size: 1.1rem;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+#chat-box {
+    background: white;
+    color: black;
+    border-radius: 12px;
+    padding: 15px;
+    min-height: 250px;
+    text-align: left;
+    margin-bottom: 20px;
+    overflow-y: auto;
+}
+
+#userInput {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    border-radius: 10px;
+    border: none;
+    margin-bottom: 15px;
+}
