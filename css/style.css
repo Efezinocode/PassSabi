@@ -1,23 +1,79 @@
-/* Basic Reset */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: sans-serif; background-color: #f4f4f9; height: 100vh; display: flex; justify-content: center; align-items: center; }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-/* Main Container */
-.container { width: 100%; max-width: 400px; height: 90vh; background: white; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #0f172a;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
 
-h1 { padding: 15px; font-size: 1.2rem; background: #007bff; color: white; text-align: center; }
+.container {
+    max-width: 700px;
+    text-align: center;
+}
 
-/* Chat Box Area */
-#chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
 
-/* Message Bubbles */
-.msg { padding: 10px; border-radius: 15px; max-width: 80%; }
-.user { align-self: flex-end; background: #007bff; color: white; }
-.ai { align-self: flex-start; background: #e9ecef; color: black; }
+.tagline {
+    font-size: 1.8rem;
+    color: #38bdf8;
+    margin-bottom: 25px;
+}
 
-/* Input Area */
-.input-area { display: flex; padding: 10px; border-top: 1px solid #ddd; }
-#userInput { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-#sendBtn { margin-left: 5px; padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 5px; }
+.description {
+    font-size: 1.2rem;
+    line-height: 1.8;
+    margin-bottom: 35px;
+}
+
+button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    font-size: 1.1rem;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+#chat-box {
+    background: white;
+    color: black;
+    border-radius: 12px;
+    padding: 15px;
+    min-height: 250px;
+    text-align: left;
+    margin-bottom: 20px;
+    overflow-y: auto;
+}
+
+#userInput {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    border-radius: 10px;
+    border: none;
+    margin-bottom: 15px;
+}
 
 
