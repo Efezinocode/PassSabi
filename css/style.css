@@ -1,21 +1,19 @@
-body { font-family: 'Segoe UI', sans-serif; margin: 0; line-height: 1.6; color: #333; }
+/* Reset basics */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: sans-serif; line-height: 1.6; }
 
-/* Navbar */
-.navbar { display: flex; justify-content: space-between; padding: 20px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-.nav-links { list-style: none; display: flex; gap: 20px; }
+/* Navbar - The layout fix */
+.navbar { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 20px; 
+    background: #f8f9fa; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+}
+.nav-links { list-style: none; display: flex; gap: 15px; }
 .nav-links a { text-decoration: none; color: #333; font-weight: bold; }
 
-/* Hero */
-.hero { text-align: center; padding: 60px 20px; background: #f4f7f6; }
-.hero h1 { font-size: 2.5rem; color: #007bff; }
-.hero button { padding: 15px 30px; font-size: 1.1rem; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+/* Content padding to prevent touching the nav */
+.container { padding: 20px; }
 
-/* Features */
-.features { display: flex; justify-content: center; gap: 20px; padding: 40px 20px; flex-wrap: wrap; }
-.feature-card { background: white; padding: 20px; border-radius: 10px; width: 250px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
-
-/* Footer */
-footer { text-align: center; padding: 20px; background: #333; color: white; }
-
-/* Layout fix for pages with a header */
-header { margin-bottom: 20px; }
