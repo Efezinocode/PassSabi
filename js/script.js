@@ -1,5 +1,5 @@
 const btn = document.getElementById("btn");
 
-btn.onclick = function () {
-    alert("Welcome to PassSabi AI 🚀");
-};
+btn.addEventListener("click", function () {
+    window.location.href = "chat.html";
+});
