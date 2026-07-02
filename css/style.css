@@ -4,37 +4,43 @@
     box-sizing: border-box;
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 body {
     font-family: Arial, Helvetica, sans-serif;
     background: #0f172a;
     color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     min-height: 100vh;
-    padding: 20px;
+    padding: 24px 16px;
+    line-height: 1.6;
 }
 
 .container {
-    max-width: 700px;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
     text-align: center;
+    padding: 24px 20px;
 }
 
 h1 {
-    font-size: 3rem;
-    margin-bottom: 20px;
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    margin-bottom: 18px;
 }
 
 .tagline {
-    font-size: 1.8rem;
+    font-size: clamp(1.2rem, 3vw, 1.8rem);
     color: #38bdf8;
-    margin-bottom: 25px;
+    margin-bottom: 22px;
 }
 
 .description {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     line-height: 1.8;
-    margin-bottom: 35px;
+    margin-bottom: 26px;
+    color: #e5e7eb;
 }
 
 button {
@@ -42,10 +48,10 @@ button {
     color: white;
     border: none;
     padding: 16px 32px;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     border-radius: 12px;
     cursor: pointer;
-    transition: background 0.3s ease;
+    transition: background 0.25s ease, transform 0.15s ease;
 }
 
 button:hover {
@@ -54,6 +60,15 @@ button:hover {
 
 button:active {
     transform: scale(0.98);
+}
+
+a {
+    color: #38bdf8;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
 }
 
 #chat-box {
@@ -74,6 +89,25 @@ button:active {
     border-radius: 10px;
     border: none;
     margin-bottom: 15px;
+    outline: none;
+}
+
+#userInput:focus {
+    box-shadow: 0 0 0 2px #38bdf8;
+}
+
+@media (max-width: 600px) {
+    body {
+        padding: 18px 12px;
+    }
+
+    .container {
+        padding: 18px 14px;
+    }
+
+    button {
+        width: 100%;
+    }
 }
 
 
