@@ -49,6 +49,8 @@ document.addEventListener("DOMContentLoaded", function () {
         botMessage.appendChild(document.createTextNode("I'm still under development. Soon I'll answer your questions with AI."));
         chatBox.appendChild(botMessage);
 
+        chatBox.scrollTop = chatBox.scrollHeight;
+
         input.value = "";
     }
 });
