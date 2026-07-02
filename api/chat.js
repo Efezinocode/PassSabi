@@ -1,13 +1,10 @@
 export default {
   async fetch(request) {
     if (request.method !== "POST") {
-      return new Response(
-        JSON.stringify({ error: "Method not allowed" }),
-        {
-          status: 405,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
+        status: 405,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     try {
@@ -15,13 +12,10 @@ export default {
       const message = typeof body.message === "string" ? body.message.trim() : "";
 
       if (!message) {
-        return new Response(
-          JSON.stringify({ error: "Message is required" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        return new Response(JSON.stringify({ error: "Message is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       const apiKey = process.env.GEMINI_API_KEY;
@@ -36,16 +30,14 @@ export default {
         );
       }
 
-      const prompt = `
-You are PassSabi AI, a friendly AI teacher for students.
-Explain clearly, step by step, and keep answers simple and helpful.
-If the question is about school, homework, WAEC, NECO, JAMB, GCE, or NABTEB, answer like a teacher.
+      const prompt = `You are PassSabi AI, a friendly personal AI teacher for students.
+Explain clearly, step by step, and use simple language.
+Keep answers helpful, safe, and easy to understand.
 
-Student question: ${message}
-      `.trim();
+Student question: ${message}`;
 
       const geminiResponse = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/interactions",
         {
           method: "POST",
           headers: {
@@ -53,15 +45,12 @@ Student question: ${message}
             "x-goog-api-key": apiKey,
           },
           body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: prompt,
-                  },
-                ],
-              },
-            ],
+            model: "gemini-3.5-flash",
+            system_instruction: "You are PassSabi AI, a friendly AI teacher for students.",
+            input: prompt,
+            generation_config: {
+              temperature: 0.7,
+            },
           }),
         }
       );
@@ -82,29 +71,32 @@ Student question: ${message}
 
       const data = await geminiResponse.json();
 
-      const reply =
-        data?.candidates?.[0]?.content?.parts
-          ?.map((part) => part.text || "")
-          .join("")
-          .trim() || "Sorry, I could not generate a response.";
+      const steps = Array.isArray(data.steps) ? data.steps : [];
+      const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
 
-      return new Response(
-        JSON.stringify({ reply }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      let reply =
+        typeof data.output_text === "string" ? data.output_text.trim() : "";
+
+      if (!reply && lastStep && Array.isArray(lastStep.content)) {
+        reply = lastStep.content
+          .map((part) => part?.text || "")
+          .join("")
+          .trim();
+      }
+
+      if (!reply) {
+        reply = "Sorry, I could not generate a response.";
+      }
+
+      return new Response(JSON.stringify({ reply }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     } catch (error) {
-      return new Response(
-        JSON.stringify({
-          error: "Server error",
-        }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   },
 };
