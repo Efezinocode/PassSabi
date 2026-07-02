@@ -76,12 +76,12 @@ a:hover {
     color: black;
     border-radius: 12px;
     padding: 15px;
-    min-height: 250px;
+    min-height: 180px;
+    max-height: 350px;
     text-align: left;
     margin-bottom: 20px;
     overflow-y: auto;
 }
-
 #userInput {
     width: 100%;
     padding: 14px;
