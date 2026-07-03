@@ -30,17 +30,7 @@ export default {
         );
       }
 
-      const geminiResponse = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/interactions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: JSON.stringify({
-            model: "gemini-3.5-flash",
-            system_instruction: `
+      const systemInstruction = `
 You are PassSabi AI, a friendly AI teacher for students.
 
 Facts about you:
@@ -53,10 +43,23 @@ Style rules:
 - Be helpful, calm, and professional.
 - Do not greet with a welcome message.
 - Do not say you are under development.
-- Do not use unnecessary decoration.
-- Use Markdown only when it helps readability.
+- Do not use markdown, asterisks, hashtags, or code fences.
+- Use plain text only.
+- If a list is needed, use simple numbered lines like 1. 2. 3.
 - If asked who founded PassSabi AI, answer: Efezino Uzezi.
-            `.trim(),
+      `.trim();
+
+      const geminiResponse = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/interactions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
+          body: JSON.stringify({
+            model: "gemini-3.5-flash",
+            system_instruction: systemInstruction,
             input: message,
           }),
         }
@@ -77,56 +80,20 @@ Style rules:
       }
 
       const data = await geminiResponse.json();
-      const reply = extractReply(data);
+      const reply =
+        typeof data?.output_text === "string" && data.output_text.trim()
+          ? data.output_text.trim()
+          : "Sorry, I could not generate a response.";
 
-      return new Response(
-        JSON.stringify({
-          reply: reply || "Sorry, I could not generate a response.",
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ reply }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     } catch (error) {
-      return new Response(
-        JSON.stringify({
-          error: "Server error",
-        }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   },
 };
-
-function extractReply(data) {
-  if (typeof data?.output_text === "string" && data.output_text.trim()) {
-    return data.output_text.trim();
-  }
-
-  if (typeof data?.response?.output_text === "string" && data.response.output_text.trim()) {
-    return data.response.output_text.trim();
-  }
-
-  const steps = Array.isArray(data?.steps) ? data.steps : [];
-
-  for (let i = steps.length - 1; i >= 0; i -= 1) {
-    const content = steps[i]?.content;
-
-    if (Array.isArray(content)) {
-      const text = content
-        .map((part) => part?.text || "")
-        .join("")
-        .trim();
-
-      if (text) {
-        return text;
-      }
-    }
-  }
-
-  return "";
-          }
