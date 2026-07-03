@@ -1,7 +1,6 @@
 // api/chat.js
 // Vercel-compatible API route for /api/chat
-// Handles OPTIONS preflight, POST requests, and GET debug via ?message=
-// Reads API key from process.env.GOOGLE_API_KEY or process.env.GEMINI_API_KEY
+// Uses gemini-pro (free tier)
 
 export default async function handler(req, res) {
   // CORS headers
@@ -13,7 +12,6 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  // Support GET for quick mobile debugging: /api/chat?message=hello
   let message = "";
   if (req.method === "GET") {
     try {
@@ -27,13 +25,11 @@ export default async function handler(req, res) {
     if (!message) {
       return res.status(400).json({ error: "Message is required (use ?message= for GET)" });
     }
-    // continue below to call Gemini using the message
   } else if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    // If POST, parse body (Vercel usually provides req.body)
     if (req.method === "POST") {
       const body = req.body && Object.keys(req.body).length ? req.body : await readRawBody(req);
       message = typeof body.message === "string" ? body.message.trim() : "";
@@ -41,24 +37,23 @@ export default async function handler(req, res) {
     }
 
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    const bearer = process.env.GOOGLE_BEARER_TOKEN || process.env.GEMINI_BEARER_TOKEN;
 
-    if (!apiKey && !bearer) {
-      // Helpful message for debugging — set the env var in Vercel project settings
-      return res.status(500).json({ error: "Missing GOOGLE_API_KEY or GEMINI_API_KEY environment variable" });
+    if (!apiKey) {
+      console.error("❌ ERROR: No API key found");
+      return res.status(500).json({ 
+        error: "Missing GOOGLE_API_KEY environment variable",
+        details: "Set GOOGLE_API_KEY in Vercel project settings"
+      });
     }
 
-    // Allow quick mock for testing without a real key
+    console.log("✅ API Key found");
+
     if (process.env.MOCK_REPLY === "true") {
-      return res.status(200).json({ reply: "This is a mock reply. Set GOOGLE_API_KEY to call Gemini." });
+      return res.status(200).json({ reply: "This is a mock reply." });
     }
 
-    // Build headers for Gemini call
-    const headers = { "Content-Type": "application/json" };
-    if (apiKey) headers["x-goog-api-key"] = apiKey;
-    if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
-
-    const systemInstruction = `You are PassSabi AI, a friendly AI teacher for students.
+    // System instruction for gemini-pro (free tier)
+    const systemPrompt = `You are PassSabi AI, a friendly AI teacher for students.
 
 Facts about you:
 - Your name is PassSabi AI.
@@ -70,54 +65,77 @@ Style rules:
 - Be helpful, calm, and professional.
 - Do not greet with a welcome message.
 - Do not say you are under development.
-- Do not use markdown, asterisks, hashtags, or code fences.
 - Use plain text only.
 - If a list is needed, use simple numbered lines like 1. 2. 3.
-- If asked who founded PassSabi AI, answer: Efezino Uzezi.`.trim();
+- If asked who founded PassSabi AI, answer: Efezino Uzezi.`;
 
-    // Call Gemini API
-    const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey, {
+    // For gemini-pro (free tier), add system instruction as first message
+    const contents = [
+      {
+        role: "user",
+        parts: [{ text: systemPrompt }]
+      },
+      {
+        role: "model",
+        parts: [{ text: "I understand. I'm PassSabi AI, ready to help students learn." }]
+      },
+      {
+        role: "user",
+        parts: [{ text: message }]
+      }
+    ];
+
+    console.log("📤 Calling Gemini API (gemini-pro - free tier)");
+
+    // Use gemini-pro for free tier
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`;
+
+    const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemInstruction }] },
-        contents: [{ 
-          parts: [{ text: message }] 
-        }]
-      }),
+      body: JSON.stringify({ contents })
     });
+
+    console.log("📥 Response status:", resp.status);
 
     const text = await resp.text();
 
     if (!resp.ok) {
-      console.error("Gemini API error:", resp.status, text);
-      return res.status(502).json({ error: "Gemini request failed", details: text });
+      console.error("❌ Gemini API error:", resp.status, text.substring(0, 200));
+      return res.status(502).json({ 
+        error: "Gemini API failed",
+        status: resp.status,
+        details: text.substring(0, 300)
+      });
     }
 
     let data = null;
     try {
       data = text ? JSON.parse(text) : null;
     } catch (e) {
-      console.error("Failed to parse response:", text);
-      data = null;
+      console.error("❌ JSON parse error:", text.substring(0, 100));
+      return res.status(502).json({ error: "Invalid response from Gemini" });
     }
 
-    const reply = extractReply(data) || (data && data.reply) || (typeof text === "string" ? text.trim() : "");
+    const reply = extractReply(data);
 
     if (!reply) {
-      console.error("No reply extracted. Response:", JSON.stringify(data, null, 2));
+      console.error("❌ No reply extracted from:", JSON.stringify(data).substring(0, 200));
+      return res.status(502).json({ error: "No response from Gemini" });
     }
 
-    return res.status(200).json({ reply: reply || "Sorry, I could not generate a response." });
+    console.log("✅ Success! Reply length:", reply.length);
+    return res.status(200).json({ reply });
+
   } catch (error) {
-    console.error("Server error:", error.message);
-    const body = { error: "Server error" };
-    if (error?.message) body.details = error.message;
-    return res.status(500).json(body);
+    console.error("❌ Server error:", error.message);
+    return res.status(500).json({ 
+      error: "Server error",
+      details: error.message 
+    });
   }
 }
 
-// Helper to read raw body if req.body is not populated
 function readRawBody(req) {
   return new Promise((resolve) => {
     let data = "";
@@ -138,41 +156,17 @@ function readRawBody(req) {
 function extractReply(data) {
   if (!data) return "";
   
-  // Gemini API v1beta returns response in candidates[].content.parts[].text
-  if (Array.isArray(data?.candidates)) {
-    const text = data.candidates
-      .map((candidate) => {
-        const parts = candidate?.content?.parts;
-        if (!Array.isArray(parts)) return "";
-        return parts.map((part) => part?.text || "").join("");
-      })
-      .join("")
-      .trim();
-    if (text) return text;
-  }
-  
-  if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text.trim();
-  if (typeof data?.response?.output_text === "string" && data.response.output_text.trim()) return data.response.output_text.trim();
-  
-  if (Array.isArray(data?.steps)) {
-    const text = data.steps
-      .map((step) => {
-        if (!Array.isArray(step?.content)) return "";
-        return step.content.map((part) => part?.text || "").join("");
-      })
-      .join("")
-      .trim();
-    if (text) return text;
-  }
-  
-  if (Array.isArray(data?.output) && data.output.length > 0) {
-    try {
-      const t = data.output
-        .map((o) => (Array.isArray(o?.content) ? o.content.map((c) => c?.text || "").join("") : ""))
-        .join("")
-        .trim();
-      if (t) return t;
-    } catch (e) {}
+  // Gemini API returns response in candidates[].content.parts[].text
+  if (Array.isArray(data?.candidates) && data.candidates.length > 0) {
+    const candidate = data.candidates[0];
+    if (candidate?.content?.parts && Array.isArray(candidate.content.parts)) {
+      const texts = candidate.content.parts
+        .map(part => part?.text || "")
+        .filter(t => t.trim().length > 0);
+      if (texts.length > 0) {
+        return texts.join(" ").trim();
+      }
+    }
   }
   
   return "";
