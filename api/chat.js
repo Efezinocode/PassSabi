@@ -75,11 +75,14 @@ Style rules:
 - If a list is needed, use simple numbered lines like 1. 2. 3.
 - If asked who founded PassSabi AI, answer: Efezino Uzezi.`.trim();
 
-    // Call Gemini
-    const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    // Call Gemini with correct endpoint and payload
+    const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent", {
       method: "POST",
       headers,
-      body: JSON.stringify({ model: "gemini-3.5-flash", system_instruction: systemInstruction, input: message }),
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ parts: [{ text: message }] }]
+      }),
     });
 
     const text = await resp.text();
@@ -153,4 +156,4 @@ function extractReply(data) {
     } catch (e) {}
   }
   return "";
-    }
+}
