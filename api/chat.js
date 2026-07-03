@@ -1,148 +1,134 @@
 // api/chat.js
-// Vercel-compatible API route for /api/chat
-// Uses gemini-pro (free tier)
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-
-  let message = "";
-  if (req.method === "GET") {
-    try {
-      const url = new URL(req.url, `https://${req.headers.host || 'example.com'}`);
-      message = url.searchParams.get("message") || "";
-      message = typeof message === "string" ? message.trim() : "";
-    } catch (e) {
-      message = "";
-    }
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
-    }
-  } else if (req.method !== "POST") {
+  if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    if (req.method === "POST") {
-      const body = req.body && Object.keys(req.body).length ? req.body : await readRawBody(req);
-      message = typeof body.message === "string" ? body.message.trim() : "";
-      if (!message) return res.status(400).json({ error: "Message is required" });
+    const body =
+      typeof req.body === "string"
+        ? JSON.parse(req.body || "{}")
+        : (req.body || {});
+
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
     }
 
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      console.error("❌ No API key found");
-      return res.status(500).json({ error: "Missing GOOGLE_API_KEY" });
-    }
-
-    console.log("✅ API Key loaded");
-
-    if (process.env.MOCK_REPLY === "true") {
-      return res.status(200).json({ reply: "Mock reply" });
-    }
-
-    console.log("📤 Calling Gemini API with message:", message.substring(0, 50));
-
-    // Use v1beta/generateContent endpoint (correct for gemini-pro)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
-
-    console.log("📤 URL:", url.substring(0, 80) + "...");
-
-    // Correct payload format for gemini-pro
-    const payload = {
-      prompt: {
-        text: message
-      }
-    };
-
-    console.log("📤 Sending payload:", JSON.stringify(payload));
-
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    console.log("📥 Response status:", resp.status);
-
-    const text = await resp.text();
-    console.log("📥 Response body:", text.substring(0, 200));
-
-    if (!resp.ok) {
-      console.error("❌ API Error:", resp.status);
-      console.error("❌ Full error:", text);
-      return res.status(502).json({ 
-        error: `Gemini API error: ${resp.status}`,
-        details: text
+      return res.status(500).json({
+        error: "Missing GOOGLE_API_KEY or GEMINI_API_KEY environment variable",
       });
     }
 
-    let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch (e) {
-      console.error("❌ JSON parse error:", e);
-      return res.status(502).json({ error: "Invalid JSON response" });
+    const systemInstruction = `
+You are PassSabi AI, a friendly AI teacher for students.
+
+Facts about you:
+- Your name is PassSabi AI.
+- You were founded by Efezino Uzezi.
+- You help students with classwork, homework, WAEC, NECO, JAMB, GCE, NABTEB, and other school exams.
+
+Style rules:
+- Answer clearly and step by step.
+- Be helpful, calm, and professional.
+- Do not greet with a welcome message.
+- Do not say you are under development.
+- Do not use markdown, asterisks, hashtags, or code fences.
+- Use plain text only.
+- If a list is needed, use simple numbered lines like 1. 2. 3.
+- If asked who founded PassSabi AI, answer: Efezino Uzezi.
+    `.trim();
+
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/interactions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          model: "gemini-3.5-flash",
+          input: message,
+          system_instruction: systemInstruction,
+        }),
+      }
+    );
+
+    const raw = await response.text();
+
+    if (!response.ok) {
+      return res.status(502).json({
+        error: `Gemini API error: ${response.status}`,
+        details: raw,
+      });
     }
 
-    console.log("📥 Parsed data structure:", JSON.stringify(data).substring(0, 200));
+    let data = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      return res.status(502).json({
+        error: "Invalid JSON from Gemini",
+        details: raw,
+      });
+    }
 
     const reply = extractReply(data);
 
     if (!reply) {
-      console.error("❌ No reply extracted from:", JSON.stringify(data));
-      return res.status(502).json({ error: "No response text found" });
+      return res.status(502).json({
+        error: "No response text found",
+        details: raw,
+      });
     }
 
-    console.log("✅ Success! Reply:", reply.substring(0, 100));
     return res.status(200).json({ reply });
-
   } catch (error) {
-    console.error("❌ Catch error:", error.message);
-    console.error("❌ Stack:", error.stack);
-    return res.status(500).json({ error: error.message });
-  }
-}
-
-function readRawBody(req) {
-  return new Promise((resolve) => {
-    let data = "";
-    req.on("data", (chunk) => { data += chunk; });
-    req.on("end", () => {
-      try { resolve(JSON.parse(data || "{}")); } catch (e) { resolve({}); }
+    return res.status(500).json({
+      error: error.message || "Server error",
     });
-    req.on("error", () => resolve({}));
-  });
+  }
 }
 
 function extractReply(data) {
-  if (!data) return "";
-  
-  // Try candidates format (modern Gemini API)
-  if (Array.isArray(data?.candidates) && data.candidates.length > 0) {
-    const candidate = data.candidates[0];
-    if (candidate?.content?.parts && Array.isArray(candidate.content.parts)) {
-      const text = candidate.content.parts
-        .map(p => p?.text || "")
-        .join(" ")
-        .trim();
-      if (text) return text;
-    }
+  if (typeof data?.output_text === "string" && data.output_text.trim()) {
+    return data.output_text.trim();
   }
 
-  // Try output (older format)
-  if (Array.isArray(data?.outputs) && data.outputs.length > 0) {
-    if (typeof data.outputs[0] === "string") return data.outputs[0];
+  if (typeof data?.response?.output_text === "string" && data.response.output_text.trim()) {
+    return data.response.output_text.trim();
   }
 
-  // Try text field
-  if (typeof data?.text === "string") return data.text.trim();
+  if (Array.isArray(data?.steps)) {
+    const text = data.steps
+      .map((step) => {
+        if (!Array.isArray(step?.content)) return "";
+        return step.content.map((part) => part?.text || "").join("");
+      })
+      .join("")
+      .trim();
+
+    if (text) return text;
+  }
+
+  if (Array.isArray(data?.candidates)) {
+    const text = data.candidates
+      .map((candidate) => {
+        const parts = candidate?.content?.parts;
+        if (!Array.isArray(parts)) return "";
+        return parts.map((part) => part?.text || "").join("");
+      })
+      .join("")
+      .trim();
+
+    if (text) return text;
+  }
 
   return "";
 }
