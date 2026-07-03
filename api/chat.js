@@ -67,6 +67,8 @@ Style rules:
 
       if (!geminiResponse.ok) {
         const errorText = await geminiResponse.text();
+        console.error("Gemini error:", errorText);
+
         return new Response(
           JSON.stringify({
             error: "Gemini request failed",
@@ -80,16 +82,29 @@ Style rules:
       }
 
       const data = await geminiResponse.json();
-      const reply =
-        typeof data?.output_text === "string" && data.output_text.trim()
-          ? data.output_text.trim()
-          : "Sorry, I could not generate a response.";
 
-      return new Response(JSON.stringify({ reply }), {
+      let reply = "";
+      if (typeof data?.output_text === "string" && data.output_text.trim()) {
+        reply = data.output_text.trim();
+      } else if (Array.isArray(data?.steps)) {
+        reply = data.steps
+          .map((step) => {
+            if (!Array.isArray(step?.content)) return "";
+            return step.content
+              .map((part) => part?.text || "")
+              .join("");
+          })
+          .join("")
+          .trim();
+      }
+
+      return new Response(JSON.stringify({ reply: reply || "Sorry, I could not generate a response." }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     } catch (error) {
+      console.error("Server error:", error);
+
       return new Response(JSON.stringify({ error: "Server error" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
