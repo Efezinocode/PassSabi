@@ -1,3 +1,5 @@
+// script.js
+
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
   const sendBtn = document.getElementById("sendBtn");
@@ -45,6 +47,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const message = input.value.trim();
     if (message === "") return;
 
+    // Add user message
     const userMsg = { role: "user", text: message, ts: Date.now() };
     messages.push(userMsg);
     saveMessages(messages);
@@ -54,7 +57,9 @@ document.addEventListener("DOMContentLoaded", function () {
     input.disabled = true;
     if (sendBtn) sendBtn.disabled = true;
 
-    appendMessage({ role: "assistant", text: "", typing: true, ts: Date.now() });
+    // Add typing indicator
+    const typingElement = appendTypingIndicator();
+
     chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
 
     try {
@@ -64,39 +69,68 @@ document.addEventListener("DOMContentLoaded", function () {
         body: JSON.stringify({ message }),
       });
 
-      const raw = await response.text();
-      let data = null;
-
-      try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch {
-        data = null;
-      }
-
       if (!response.ok) {
-        const errMsg =
-          (data && (data.error || data.details)) || raw || "Something went wrong.";
-        throw new Error(errMsg);
+        throw new Error("Failed to get response");
       }
 
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullReply = "";
+
+      // Remove typing indicator
       removeTypingPlaceholders();
 
-      const replyText = cleanReply(
-        (data && (data.reply || data.response || data.text)) || raw || ""
-      );
+      // Create assistant message bubble
+      const assistantMsgElement = createAssistantBubble();
+      let currentText = "";
 
-      const assistantMsg = { role: "assistant", text: replyText, ts: Date.now() };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.error) {
+                throw new Error(data.error);
+              }
+
+              if (data.chunk) {
+                currentText += data.chunk;
+                fullReply += data.chunk;
+                updateAssistantBubble(assistantMsgElement, currentText);
+              }
+
+              if (data.done) {
+                // Final message with provider info (optional)
+                console.log(`Answered by: ${data.provider}`);
+              }
+            } catch (e) {
+              // Ignore parsing errors for incomplete chunks
+            }
+          }
+        }
+
+        chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
+      }
+
+      // Save final message
+      const assistantMsg = { role: "assistant", text: fullReply.trim(), ts: Date.now() };
       messages.push(assistantMsg);
       saveMessages(messages);
-      appendMessage(assistantMsg);
+
     } catch (err) {
       console.error("Chat error:", err);
-
       removeTypingPlaceholders();
 
       const errMsg = {
         role: "assistant",
-        text: err && err.message ? String(err.message) : "Sorry, something went wrong.",
+        text: err.message || "Sorry, something went wrong. Please try again.",
         ts: Date.now(),
       };
 
@@ -111,33 +145,52 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  // Helper Functions
   function appendMessage(msg) {
     const row = document.createElement("div");
     row.className = `chat-row ${msg.role}`;
 
     const bubble = document.createElement("div");
     bubble.className = "chat-bubble";
-
-    if (msg.typing) {
-      bubble.classList.add("typing");
-      bubble.innerHTML =
-        '<span class="typing-dots"><span></span><span></span><span></span></span>';
-    } else {
-      bubble.textContent = cleanReply(msg.text);
-    }
+    bubble.textContent = cleanReply(msg.text);
 
     row.appendChild(bubble);
     chatBox.appendChild(row);
-    return { row, bubble };
+  }
+
+  function appendTypingIndicator() {
+    const row = document.createElement("div");
+    row.className = "chat-row assistant";
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble typing";
+    bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+
+    row.appendChild(bubble);
+    chatBox.appendChild(row);
+    return row;
+  }
+
+  function createAssistantBubble() {
+    const row = document.createElement("div");
+    row.className = "chat-row assistant";
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+    bubble.textContent = "";
+
+    row.appendChild(bubble);
+    chatBox.appendChild(row);
+    return bubble;
+  }
+
+  function updateAssistantBubble(bubble, text) {
+    bubble.textContent = cleanReply(text);
   }
 
   function removeTypingPlaceholders() {
-    chatBox
-      .querySelectorAll(".chat-row.assistant .chat-bubble.typing")
-      .forEach((ph) => {
-        const row = ph.closest(".chat-row");
-        if (row) row.remove();
-      });
+    chatBox.querySelectorAll(".chat-row.assistant .chat-bubble.typing")
+      .forEach(ph => ph.closest(".chat-row").remove());
   }
 
   function renderMessages(list) {
