@@ -18,11 +18,11 @@ export default {
         });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
 
       if (!apiKey) {
         return new Response(
-          JSON.stringify({ error: "Missing GEMINI_API_KEY environment variable" }),
+          JSON.stringify({ error: "Missing GOOGLE_API_KEY or GEMINI_API_KEY environment variable" }),
           {
             status: 500,
             headers: { "Content-Type": "application/json" },
@@ -67,7 +67,7 @@ Style rules:
 
       if (!geminiResponse.ok) {
         const errorText = await geminiResponse.text();
-        console.error("Gemini error:", errorText);
+        console.error("Gemini request failed:", errorText);
 
         return new Response(
           JSON.stringify({
@@ -82,26 +82,21 @@ Style rules:
       }
 
       const data = await geminiResponse.json();
+      const reply = extractReply(data);
 
-      let reply = "";
-      if (typeof data?.output_text === "string" && data.output_text.trim()) {
-        reply = data.output_text.trim();
-      } else if (Array.isArray(data?.steps)) {
-        reply = data.steps
-          .map((step) => {
-            if (!Array.isArray(step?.content)) return "";
-            return step.content
-              .map((part) => part?.text || "")
-              .join("");
-          })
-          .join("")
-          .trim();
+      if (!reply) {
+        console.error("Unexpected Gemini response shape:", JSON.stringify(data, null, 2));
       }
 
-      return new Response(JSON.stringify({ reply: reply || "Sorry, I could not generate a response." }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          reply: reply || "Sorry, I could not generate a response.",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     } catch (error) {
       console.error("Server error:", error);
 
@@ -112,3 +107,42 @@ Style rules:
     }
   },
 };
+
+function extractReply(data) {
+  if (typeof data?.output_text === "string" && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  if (typeof data?.response?.output_text === "string" && data.response.output_text.trim()) {
+    return data.response.output_text.trim();
+  }
+
+  if (Array.isArray(data?.steps)) {
+    const text = data.steps
+      .map((step) => {
+        if (!Array.isArray(step?.content)) return "";
+        return step.content
+          .map((part) => part?.text || "")
+          .join("");
+      })
+      .join("")
+      .trim();
+
+    if (text) return text;
+  }
+
+  if (Array.isArray(data?.candidates)) {
+    const text = data.candidates
+      .map((candidate) => {
+        const parts = candidate?.content?.parts;
+        if (!Array.isArray(parts)) return "";
+        return parts.map((part) => part?.text || "").join("");
+      })
+      .join("")
+      .trim();
+
+    if (text) return text;
+  }
+
+  return "";
+           }
