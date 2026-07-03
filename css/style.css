@@ -109,5 +109,28 @@ a:hover {
         width: 100%;
     }
 }
+.chat-message {
+    margin-bottom: 12px;
+    line-height: 1.7;
+    word-wrap: break-word;
+}
 
+.chat-message strong {
+    color: #2563eb;
+}
+
+.chat-message.assistant {
+    margin-top: 6px;
+}
+
+.chat-message.assistant code {
+    background: #e2e8f0;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: Consolas, Monaco, monospace;
+}
+
+.chat-message.user {
+    opacity: 0.98;
+}
 
