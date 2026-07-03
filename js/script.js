@@ -1,98 +1,163 @@
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
+  const sendBtn = document.getElementById("sendBtn");
+  const input = document.getElementById("userInput");
+  const chatBox = document.getElementById("chat-box");
+  const clearBtn = document.getElementById("clearBtn");
+  const form = document.getElementById("chat-form");
+  const STORAGE_KEY = "passsabi_messages_v1";
 
+  // If the homepage button exists, link to chat page
   if (btn) {
     btn.addEventListener("click", function () {
       window.location.href = "chat.html";
     });
   }
 
-  const sendBtn = document.getElementById("sendBtn");
-  const input = document.getElementById("userInput");
-  const chatBox = document.getElementById("chat-box");
+  // If we don't have the chat controls, nothing to do
+  if (!chatBox || !input || !form) return;
 
-  if (!sendBtn || !input || !chatBox) return;
+  // Load saved messages and render
+  let messages = loadMessages();
+  renderMessages(messages);
 
-  sendBtn.addEventListener("click", sendMessage);
+  // Focus input on load
+  input.focus();
 
+  // Form submit handles sending
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    sendMessage();
+  });
+
+  // Clear chat
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function () {
+      if (!confirm("Clear chat history?")) return;
+      messages = [];
+      saveMessages(messages);
+      chatBox.innerHTML = "";
+    });
+  }
+
+  // Keyboard Enter also sends
   input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       sendMessage();
     }
   });
 
   async function sendMessage() {
     const message = input.value.trim();
-
     if (message === "") return;
 
-    appendRow("user", message);
+    // Add user message
+    const userMsg = { role: "user", text: message, ts: Date.now() };
+    messages.push(userMsg);
+    saveMessages(messages);
+    appendMessage(userMsg);
     input.value = "";
+    input.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
 
-    const typingRow = appendRow("assistant", "…", true);
-    sendBtn.disabled = true;
+    // Add typing indicator
+    const typingPlaceholder = { role: "assistant", text: "", typing: true, ts: Date.now() };
+    appendMessage(typingPlaceholder);
+    chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
 
-      // Read raw response text first so we can show non-JSON errors too
       const raw = await response.text();
       let data = null;
-      try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch (e) {
-        // not JSON
-      }
+      try { data = raw ? JSON.parse(raw) : null; } catch (e) { /* not json */ }
 
       if (!response.ok) {
-        // prefer explicit error fields from server
         const errMsg = (data && (data.error || data.details)) || raw || "Something went wrong.";
         throw new Error(errMsg);
       }
 
-      const replyText = (data && data.reply) || raw || "";
+      const replyText = (data && (data.reply || data.response || data.text)) || raw || "";
 
-      typingRow.bubble.textContent = cleanReply(replyText);
-      typingRow.bubble.classList.remove("typing");
-    } catch (error) {
-      console.error("Chat error:", error);
-      // Show the server-provided message if available to help debugging
-      typingRow.bubble.textContent = error?.message
-        ? String(error.message)
-        : "Sorry, I could not get a response right now. Please try again.";
-      typingRow.bubble.classList.remove("typing");
+      // Remove typing placeholder and append assistant reply
+      removeTypingPlaceholders();
+      const assistantMsg = { role: "assistant", text: cleanReply(replyText), ts: Date.now() };
+      messages.push(assistantMsg);
+      saveMessages(messages);
+      appendMessage(assistantMsg);
+    } catch (err) {
+      console.error("Chat error:", err);
+      removeTypingPlaceholders();
+      const errMsg = { role: "assistant", text: (err && err.message) ? String(err.message) : "Sorry, something went wrong.", ts: Date.now() };
+      messages.push(errMsg);
+      saveMessages(messages);
+      appendMessage(errMsg);
     } finally {
-      sendBtn.disabled = false;
+      input.disabled = false;
+      if (sendBtn) sendBtn.disabled = false;
       input.focus();
-      chatBox.scrollTop = chatBox.scrollHeight;
+      chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
     }
   }
 
-  function appendRow(role, text, typing = false) {
+  function appendMessage(msg) {
     const row = document.createElement("div");
-    row.className = `chat-row ${role}`;
+    row.className = `chat-row ${msg.role}`;
 
     const bubble = document.createElement("div");
     bubble.className = "chat-bubble";
-    if (typing) bubble.classList.add("typing");
 
-    bubble.textContent = cleanReply(text);
+    if (msg.typing) {
+      bubble.classList.add("typing");
+      bubble.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span>`;
+    } else {
+      bubble.textContent = cleanReply(msg.text);
+    }
 
     row.appendChild(bubble);
     chatBox.appendChild(row);
-    chatBox.scrollTop = chatBox.scrollHeight;
-
+    chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
     return { row, bubble };
   }
 
+  function removeTypingPlaceholders() {
+    const placeholders = chatBox.querySelectorAll('.chat-row.assistant .chat-bubble.typing');
+    placeholders.forEach(ph => ph.closest('.chat-row').remove());
+  }
+
+  function renderMessages(list) {
+    chatBox.innerHTML = "";
+    list.forEach(m => appendMessage(m));
+    chatBox.scrollTo({ top: chatBox.scrollHeight });
+  }
+
+  function saveMessages(list) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch (e) {
+      console.warn('Could not save messages', e);
+    }
+  }
+
+  function loadMessages() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed;
+    } catch (e) {
+      return [];
+    }
+  }
+
   function cleanReply(text) {
-    return String(text)
+    return String(text || "")
       .replace(/\r\n/g, "\n")
       .replace(/^#{1,6}\s+/gm, "")
       .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -100,4 +165,5 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/^\s*[*-]\s+/gm, "• ")
       .trim();
   }
+
 });
