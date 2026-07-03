@@ -17,7 +17,7 @@
 <body>
 
     <header>
-        <nav class="navbar" aria-label="Main">
+        <nav class="navbar" aria-label="Main Navigation">
             <h2>🎓 PassSabi AI</h2>
 
             <div class="nav-links">
@@ -30,14 +30,11 @@
     </header>
 
     <main class="container">
-
         <h1>💬 PassSabi AI</h1>
 
         <p class="tagline">Your Personal AI Teacher</p>
 
-        <div id="chat-box">
-            <p><strong>PassSabi AI:</strong> 👋 Welcome! Ask me any question about your studies.</p>
-        </div>
+        <div id="chat-box" role="log" aria-live="polite"></div>
 
         <input
             type="text"
@@ -47,11 +44,9 @@
         >
 
         <button id="sendBtn">Send</button>
-
     </main>
 
     <script src="js/script.js"></script>
-
 </body>
 </html>
 
