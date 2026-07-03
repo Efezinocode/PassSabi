@@ -41,17 +41,31 @@ document.addEventListener("DOMContentLoaded", function () {
         body: JSON.stringify({ message }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Something went wrong.");
+      // Read raw response text first so we can show non-JSON errors too
+      const raw = await response.text();
+      let data = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        // not JSON
       }
 
-      typingRow.bubble.textContent = cleanReply(data.reply);
+      if (!response.ok) {
+        // prefer explicit error fields from server
+        const errMsg = (data && (data.error || data.details)) || raw || "Something went wrong.";
+        throw new Error(errMsg);
+      }
+
+      const replyText = (data && data.reply) || raw || "";
+
+      typingRow.bubble.textContent = cleanReply(replyText);
       typingRow.bubble.classList.remove("typing");
     } catch (error) {
-      typingRow.bubble.textContent =
-        "Sorry, I could not get a response right now. Please try again.";
+      console.error("Chat error:", error);
+      // Show the server-provided message if available to help debugging
+      typingRow.bubble.textContent = error?.message
+        ? String(error.message)
+        : "Sorry, I could not get a response right now. Please try again.";
       typingRow.bubble.classList.remove("typing");
     } finally {
       sendBtn.disabled = false;
@@ -87,4 +101,3 @@ document.addEventListener("DOMContentLoaded", function () {
       .trim();
   }
 });
-
