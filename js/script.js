@@ -11,9 +11,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chat-box");
 
-  if (!sendBtn || !input || !chatBox) {
-    return;
-  }
+  if (!sendBtn || !input || !chatBox) return;
 
   sendBtn.addEventListener("click", sendMessage);
 
@@ -26,14 +24,12 @@ document.addEventListener("DOMContentLoaded", function () {
   async function sendMessage() {
     const message = input.value.trim();
 
-    if (message === "") {
-      return;
-    }
+    if (message === "") return;
 
-    appendMessage("user", "You: ", message, false);
+    appendRow("user", message);
     input.value = "";
 
-    const loadingMessage = appendMessage("assistant", "PassSabi AI: ", "Thinking...", false);
+    const typingRow = appendRow("assistant", "…", true);
     sendBtn.disabled = true;
 
     try {
@@ -51,10 +47,12 @@ document.addEventListener("DOMContentLoaded", function () {
         throw new Error(data.error || "Something went wrong.");
       }
 
-      loadingMessage.content.innerHTML = renderMarkdown(data.reply);
+      typingRow.bubble.textContent = cleanReply(data.reply);
+      typingRow.bubble.classList.remove("typing");
     } catch (error) {
-      loadingMessage.content.textContent =
+      typingRow.bubble.textContent =
         "Sorry, I could not get a response right now. Please try again.";
+      typingRow.bubble.classList.remove("typing");
     } finally {
       sendBtn.disabled = false;
       input.focus();
@@ -62,48 +60,31 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  function appendMessage(role, label, text, markdown) {
-    const messageElement = document.createElement("p");
-    messageElement.className = `chat-message ${role}`;
+  function appendRow(role, text, typing = false) {
+    const row = document.createElement("div");
+    row.className = `chat-row ${role}`;
 
-    const strongElement = document.createElement("strong");
-    strongElement.textContent = label;
-    messageElement.appendChild(strongElement);
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+    if (typing) bubble.classList.add("typing");
 
-    const contentSpan = document.createElement("span");
+    bubble.textContent = cleanReply(text);
 
-    if (markdown) {
-      contentSpan.innerHTML = renderMarkdown(text);
-    } else {
-      contentSpan.textContent = text;
-    }
-
-    messageElement.appendChild(contentSpan);
-    chatBox.appendChild(messageElement);
+    row.appendChild(bubble);
+    chatBox.appendChild(row);
     chatBox.scrollTop = chatBox.scrollHeight;
 
-    return {
-      element: messageElement,
-      content: contentSpan,
-    };
+    return { row, bubble };
   }
 
-  function renderMarkdown(text) {
-    let html = escapeHtml(text);
-
-    html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-    html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
-    html = html.replace(/^-\s(.+)$/gm, "• $1");
-    html = html.replace(/\n/g, "<br>");
-
-    return html;
-  }
-
-  function escapeHtml(text) {
-    return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+  function cleanReply(text) {
+    return String(text)
+      .replace(/\r\n/g, "\n")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/^\s*[*-]\s+/gm, "• ")
+      .trim();
   }
 });
 
