@@ -7,30 +7,24 @@ document.addEventListener("DOMContentLoaded", function () {
   const form = document.getElementById("chat-form");
   const STORAGE_KEY = "passsabi_messages_v1";
 
-  // If the homepage button exists, link to chat page
   if (btn) {
     btn.addEventListener("click", function () {
       window.location.href = "chat.html";
     });
   }
 
-  // If we don't have the chat controls, nothing to do
   if (!chatBox || !input || !form) return;
 
-  // Load saved messages and render
   let messages = loadMessages();
   renderMessages(messages);
 
-  // Focus input on load
   input.focus();
 
-  // Form submit handles sending
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     sendMessage();
   });
 
-  // Clear chat
   if (clearBtn) {
     clearBtn.addEventListener("click", function () {
       if (!confirm("Clear chat history?")) return;
@@ -40,7 +34,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Keyboard Enter also sends
   input.addEventListener("keydown", function (event) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -52,18 +45,16 @@ document.addEventListener("DOMContentLoaded", function () {
     const message = input.value.trim();
     if (message === "") return;
 
-    // Add user message
     const userMsg = { role: "user", text: message, ts: Date.now() };
     messages.push(userMsg);
     saveMessages(messages);
     appendMessage(userMsg);
+
     input.value = "";
     input.disabled = true;
     if (sendBtn) sendBtn.disabled = true;
 
-    // Add typing indicator
-    const typingPlaceholder = { role: "assistant", text: "", typing: true, ts: Date.now() };
-    appendMessage(typingPlaceholder);
+    appendMessage({ role: "assistant", text: "", typing: true, ts: Date.now() });
     chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
 
     try {
@@ -75,25 +66,40 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const raw = await response.text();
       let data = null;
-      try { data = raw ? JSON.parse(raw) : null; } catch (e) { /* not json */ }
+
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = null;
+      }
 
       if (!response.ok) {
-        const errMsg = (data && (data.error || data.details)) || raw || "Something went wrong.";
+        const errMsg =
+          (data && (data.error || data.details)) || raw || "Something went wrong.";
         throw new Error(errMsg);
       }
 
-      const replyText = (data && (data.reply || data.response || data.text)) || raw || "";
-
-      // Remove typing placeholder and append assistant reply
       removeTypingPlaceholders();
-      const assistantMsg = { role: "assistant", text: cleanReply(replyText), ts: Date.now() };
+
+      const replyText = cleanReply(
+        (data && (data.reply || data.response || data.text)) || raw || ""
+      );
+
+      const assistantMsg = { role: "assistant", text: replyText, ts: Date.now() };
       messages.push(assistantMsg);
       saveMessages(messages);
       appendMessage(assistantMsg);
     } catch (err) {
       console.error("Chat error:", err);
+
       removeTypingPlaceholders();
-      const errMsg = { role: "assistant", text: (err && err.message) ? String(err.message) : "Sorry, something went wrong.", ts: Date.now() };
+
+      const errMsg = {
+        role: "assistant",
+        text: err && err.message ? String(err.message) : "Sorry, something went wrong.",
+        ts: Date.now(),
+      };
+
       messages.push(errMsg);
       saveMessages(messages);
       appendMessage(errMsg);
@@ -114,25 +120,29 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (msg.typing) {
       bubble.classList.add("typing");
-      bubble.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span>`;
+      bubble.innerHTML =
+        '<span class="typing-dots"><span></span><span></span><span></span></span>';
     } else {
       bubble.textContent = cleanReply(msg.text);
     }
 
     row.appendChild(bubble);
     chatBox.appendChild(row);
-    chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
     return { row, bubble };
   }
 
   function removeTypingPlaceholders() {
-    const placeholders = chatBox.querySelectorAll('.chat-row.assistant .chat-bubble.typing');
-    placeholders.forEach(ph => ph.closest('.chat-row').remove());
+    chatBox
+      .querySelectorAll(".chat-row.assistant .chat-bubble.typing")
+      .forEach((ph) => {
+        const row = ph.closest(".chat-row");
+        if (row) row.remove();
+      });
   }
 
   function renderMessages(list) {
     chatBox.innerHTML = "";
-    list.forEach(m => appendMessage(m));
+    list.forEach((m) => appendMessage(m));
     chatBox.scrollTo({ top: chatBox.scrollHeight });
   }
 
@@ -140,7 +150,7 @@ document.addEventListener("DOMContentLoaded", function () {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
     } catch (e) {
-      console.warn('Could not save messages', e);
+      console.warn("Could not save messages", e);
     }
   }
 
@@ -149,8 +159,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed;
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
       return [];
     }
@@ -165,5 +174,4 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/^\s*[*-]\s+/gm, "• ")
       .trim();
   }
-
 });
