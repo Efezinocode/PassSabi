@@ -11,7 +11,9 @@ document.addEventListener("DOMContentLoaded", function () {
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chat-box");
 
-  if (!sendBtn || !input || !chatBox) return;
+  if (!sendBtn || !input || !chatBox) {
+    return;
+  }
 
   sendBtn.addEventListener("click", sendMessage);
 
@@ -24,12 +26,14 @@ document.addEventListener("DOMContentLoaded", function () {
   async function sendMessage() {
     const message = input.value.trim();
 
-    if (message === "") return;
+    if (message === "") {
+      return;
+    }
 
-    appendMessage("You: ", message);
+    appendMessage("user", "You: ", message, false);
     input.value = "";
 
-    const loadingMessage = appendMessage("PassSabi AI: ", "Thinking...");
+    const loadingMessage = appendMessage("assistant", "PassSabi AI: ", "Thinking...", false);
     sendBtn.disabled = true;
 
     try {
@@ -47,9 +51,9 @@ document.addEventListener("DOMContentLoaded", function () {
         throw new Error(data.error || "Something went wrong.");
       }
 
-      loadingMessage.lastChild.textContent = data.reply;
+      loadingMessage.content.innerHTML = renderMarkdown(data.reply);
     } catch (error) {
-      loadingMessage.lastChild.textContent =
+      loadingMessage.content.textContent =
         "Sorry, I could not get a response right now. Please try again.";
     } finally {
       sendBtn.disabled = false;
@@ -58,15 +62,48 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  function appendMessage(label, text) {
+  function appendMessage(role, label, text, markdown) {
     const messageElement = document.createElement("p");
+    messageElement.className = `chat-message ${role}`;
+
     const strongElement = document.createElement("strong");
     strongElement.textContent = label;
     messageElement.appendChild(strongElement);
-    messageElement.appendChild(document.createTextNode(text));
+
+    const contentSpan = document.createElement("span");
+
+    if (markdown) {
+      contentSpan.innerHTML = renderMarkdown(text);
+    } else {
+      contentSpan.textContent = text;
+    }
+
+    messageElement.appendChild(contentSpan);
     chatBox.appendChild(messageElement);
     chatBox.scrollTop = chatBox.scrollHeight;
-    return messageElement;
+
+    return {
+      element: messageElement,
+      content: contentSpan,
+    };
+  }
+
+  function renderMarkdown(text) {
+    let html = escapeHtml(text);
+
+    html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+    html = html.replace(/^-\s(.+)$/gm, "• $1");
+    html = html.replace(/\n/g, "<br>");
+
+    return html;
+  }
+
+  function escapeHtml(text) {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 });
 
