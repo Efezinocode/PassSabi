@@ -5,25 +5,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // Important headers for streaming
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Helps on Vercel
+
+  const sendEvent = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
   try {
-    const body =
-      typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : (req.body || {});
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const { message, provider: requestedProvider } = body;
 
-    const message = typeof body.message === "string" ? body.message.trim() : "";
-
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
+    if (!message || typeof message !== "string" || !message.trim()) {
+      sendEvent({ error: "Message is required" });
+      return res.end();
     }
 
-    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return res.status(500).json({
-        error: "Missing GOOGLE_API_KEY or GEMINI_API_KEY environment variable",
-      });
-    }
+    const trimmedMessage = message.trim();
 
     const systemInstruction = `
 You are PassSabi AI, a friendly AI teacher for students.
@@ -44,91 +45,190 @@ Style rules:
 - If asked who founded PassSabi AI, answer: Efezino Uzezi.
     `.trim();
 
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/interactions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          model: "gemini-3.5-flash",
-          input: message,
-          system_instruction: systemInstruction,
-        }),
+    let usedProvider = "";
+    const providers = requestedProvider ? [requestedProvider] : ["groq", "grok", "gemini"];
+
+    let finalReply = "";
+
+    for (const prov of providers) {
+      try {
+        sendEvent({ status: "thinking", provider: prov });
+
+        if (prov === "grok") {
+          finalReply = await streamGrok(trimmedMessage, systemInstruction, sendEvent);
+        } else if (prov === "groq") {
+          finalReply = await streamGroq(trimmedMessage, systemInstruction, sendEvent);
+        } else if (prov === "gemini") {
+          finalReply = await streamGemini(trimmedMessage, systemInstruction, sendEvent);
+        }
+
+        if (finalReply) {
+          usedProvider = prov;
+          break;
+        }
+      } catch (err) {
+        console.warn(`Provider ${prov} failed, trying next...`, err.message);
+        sendEvent({ status: "error", provider: prov, message: "Trying next provider..." });
       }
-    );
-
-    const raw = await response.text();
-
-    if (!response.ok) {
-      return res.status(502).json({
-        error: `Gemini API error: ${response.status}`,
-        details: raw,
-      });
     }
 
-    let data = {};
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch {
-      return res.status(502).json({
-        error: "Invalid JSON from Gemini",
-        details: raw,
-      });
+    if (!finalReply) {
+      sendEvent({ error: "All providers failed. Please try again." });
+    } else {
+      sendEvent({ done: true, provider: usedProvider });
     }
 
-    const reply = extractReply(data);
-
-    if (!reply) {
-      return res.status(502).json({
-        error: "No response text found",
-        details: raw,
-      });
-    }
-
-    return res.status(200).json({ reply });
   } catch (error) {
-    return res.status(500).json({
-      error: error.message || "Server error",
-    });
+    console.error(error);
+    sendEvent({ error: "Server error occurred" });
+  } finally {
+    res.end();
   }
 }
 
-function extractReply(data) {
-  if (typeof data?.output_text === "string" && data.output_text.trim()) {
-    return data.output_text.trim();
+// ====================== STREAMING HELPERS ======================
+
+async function streamGemini(message, systemInstruction, sendEvent) {
+  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Gemini key missing");
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: message }] }],
+        system_instruction: { parts: [{ text: systemInstruction }] },
+      }),
+    }
+  });
+
+  if (!response.ok) throw new Error("Gemini failed");
+
+  let fullText = "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value);
+    const lines = chunk.split('\n');
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          const json = JSON.parse(line.slice(6));
+          const text = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (text) {
+            fullText += text;
+            sendEvent({ chunk: text });
+          }
+        } catch (e) {}
+      }
+    }
   }
-
-  if (typeof data?.response?.output_text === "string" && data.response.output_text.trim()) {
-    return data.response.output_text.trim();
-  }
-
-  if (Array.isArray(data?.steps)) {
-    const text = data.steps
-      .map((step) => {
-        if (!Array.isArray(step?.content)) return "";
-        return step.content.map((part) => part?.text || "").join("");
-      })
-      .join("")
-      .trim();
-
-    if (text) return text;
-  }
-
-  if (Array.isArray(data?.candidates)) {
-    const text = data.candidates
-      .map((candidate) => {
-        const parts = candidate?.content?.parts;
-        if (!Array.isArray(parts)) return "";
-        return parts.map((part) => part?.text || "").join("");
-      })
-      .join("")
-      .trim();
-
-    if (text) return text;
-  }
-
-  return "";
+  return fullText.trim();
 }
+
+async function streamGrok(message, systemInstruction, sendEvent) {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) throw new Error("xAI key missing");
+
+  const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "grok-4",
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: message }
+      ],
+      temperature: 0.7,
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) throw new Error("Grok failed");
+
+  let fullText = "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value);
+    const lines = chunk.split('\n');
+
+    for (const line of lines) {
+      if (line.startsWith("data: ") && line !== "data: [DONE]") {
+        try {
+          const json = JSON.parse(line.slice(6));
+          const text = json.choices?.[0]?.delta?.content || "";
+          if (text) {
+            fullText += text;
+            sendEvent({ chunk: text });
+          }
+        } catch (e) {}
+      }
+    }
+  }
+  return fullText.trim();
+}
+
+async function streamGroq(message, systemInstruction, sendEvent) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("Groq key missing");
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "llama3-70b-8192",
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: message }
+      ],
+      temperature: 0.7,
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) throw new Error("Groq failed");
+
+  let fullText = "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value);
+    const lines = chunk.split('\n');
+
+    for (const line of lines) {
+      if (line.startsWith("data: ") && line !== "data: [DONE]") {
+        try {
+          const json = JSON.parse(line.slice(6));
+          const text = json.choices?.[0]?.delta?.content || "";
+          if (text) {
+            fullText += text;
+            sendEvent({ chunk: text });
+          }
+        } catch (e) {}
+      }
+    }
+  }
+  return fullText.trim();
+                    }
