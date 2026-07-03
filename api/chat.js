@@ -75,20 +75,22 @@ Style rules:
 - If a list is needed, use simple numbered lines like 1. 2. 3.
 - If asked who founded PassSabi AI, answer: Efezino Uzezi.`.trim();
 
-    // Call Gemini with correct endpoint and payload
-    const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent", {
+    // Call Gemini API
+    const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey, {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemInstruction }] },
-        contents: [{ parts: [{ text: message }] }]
+        contents: [{ 
+          parts: [{ text: message }] 
+        }]
       }),
     });
 
     const text = await resp.text();
 
     if (!resp.ok) {
-      console.error("Gemini request failed:", text);
+      console.error("Gemini API error:", resp.status, text);
       return res.status(502).json({ error: "Gemini request failed", details: text });
     }
 
@@ -96,16 +98,19 @@ Style rules:
     try {
       data = text ? JSON.parse(text) : null;
     } catch (e) {
+      console.error("Failed to parse response:", text);
       data = null;
     }
 
     const reply = extractReply(data) || (data && data.reply) || (typeof text === "string" ? text.trim() : "");
 
-    if (!reply) console.error("Unexpected Gemini response shape:", JSON.stringify(data, null, 2));
+    if (!reply) {
+      console.error("No reply extracted. Response:", JSON.stringify(data, null, 2));
+    }
 
     return res.status(200).json({ reply: reply || "Sorry, I could not generate a response." });
   } catch (error) {
-    console.error("Server error (Node):", error);
+    console.error("Server error:", error.message);
     const body = { error: "Server error" };
     if (error?.message) body.details = error.message;
     return res.status(500).json(body);
@@ -132,28 +137,43 @@ function readRawBody(req) {
 
 function extractReply(data) {
   if (!data) return "";
+  
+  // Gemini API v1beta returns response in candidates[].content.parts[].text
+  if (Array.isArray(data?.candidates)) {
+    const text = data.candidates
+      .map((candidate) => {
+        const parts = candidate?.content?.parts;
+        if (!Array.isArray(parts)) return "";
+        return parts.map((part) => part?.text || "").join("");
+      })
+      .join("")
+      .trim();
+    if (text) return text;
+  }
+  
   if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text.trim();
   if (typeof data?.response?.output_text === "string" && data.response.output_text.trim()) return data.response.output_text.trim();
+  
   if (Array.isArray(data?.steps)) {
-    const text = data.steps.map((step) => {
-      if (!Array.isArray(step?.content)) return "";
-      return step.content.map((part) => part?.text || "").join("");
-    }).join("").trim();
+    const text = data.steps
+      .map((step) => {
+        if (!Array.isArray(step?.content)) return "";
+        return step.content.map((part) => part?.text || "").join("");
+      })
+      .join("")
+      .trim();
     if (text) return text;
   }
-  if (Array.isArray(data?.candidates)) {
-    const text = data.candidates.map((candidate) => {
-      const parts = candidate?.content?.parts;
-      if (!Array.isArray(parts)) return "";
-      return parts.map((part) => part?.text || "").join("");
-    }).join("").trim();
-    if (text) return text;
-  }
+  
   if (Array.isArray(data?.output) && data.output.length > 0) {
     try {
-      const t = data.output.map((o) => (Array.isArray(o?.content) ? o.content.map((c) => c?.text || "").join("") : "")).join("").trim();
+      const t = data.output
+        .map((o) => (Array.isArray(o?.content) ? o.content.map((c) => c?.text || "").join("") : ""))
+        .join("")
+        .trim();
       if (t) return t;
     } catch (e) {}
   }
+  
   return "";
 }
