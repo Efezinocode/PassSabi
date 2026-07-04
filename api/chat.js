@@ -1,27 +1,16 @@
-// api/chat.js
+// api/chat.js - Non-Streaming Version (Simpler & More Stable)
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-
-  const sendEvent = (data) => {
-    if (res.writableEnded) return;
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const { message, provider: requestedProvider = "groq" } = body;
+    const { message, provider = "groq" } = body;
 
     if (!message || !message.trim()) {
-      sendEvent({ error: "Message is required" });
-      return res.end();
+      return res.status(400).json({ error: "Message is required" });
     }
 
     const trimmedMessage = message.trim();
@@ -45,50 +34,31 @@ Style rules:
 - If asked who founded PassSabi AI, answer: Efezino Uzezi.
     `.trim();
 
+    let reply = "";
     let usedProvider = "";
-    const providers = requestedProvider ? [requestedProvider] : ["groq", "grok", "gemini"];
-    let finalReply = "";
 
-    for (const prov of providers) {
-      try {
-        sendEvent({ status: "thinking", provider: prov });
-
-        if (prov === "grok") {
-          finalReply = await streamGrok(trimmedMessage, systemInstruction, sendEvent);
-        } else if (prov === "groq") {
-          finalReply = await streamGroq(trimmedMessage, systemInstruction, sendEvent);
-        } else if (prov === "gemini") {
-          finalReply = await streamGemini(trimmedMessage, systemInstruction, sendEvent);
-        }
-
-        if (finalReply) {
-          usedProvider = prov;
-          break;
-        }
-      } catch (err) {
-        console.warn(`Provider ${prov} failed:`, err.message);
-        sendEvent({ status: "error", provider: prov, message: err.message });
-      }
-    }
-
-    if (finalReply) {
-      console.log(`✅ Answered by ${usedProvider}`);
-      sendEvent({ done: true, provider: usedProvider });
+    if (provider === "groq" || provider === "default") {
+      reply = await callGroq(trimmedMessage, systemInstruction);
+      usedProvider = "groq";
+    } else if (provider === "grok") {
+      reply = await callGrok(trimmedMessage, systemInstruction);
+      usedProvider = "grok";
     } else {
-      sendEvent({ error: "All providers failed. Please try again." });
+      reply = await callGemini(trimmedMessage, systemInstruction);
+      usedProvider = "gemini";
     }
+
+    return res.status(200).json({ reply, provider: usedProvider });
 
   } catch (error) {
     console.error("PassSabi Error:", error);
-    sendEvent({ error: "Server error. Please try again later." });
-  } finally {
-    res.end();
+    return res.status(500).json({ error: error.message || "Server error. Please try again." });
   }
 };
 
-// ==================== STREAMING FUNCTIONS ====================
+// ==================== SIMPLE API CALLS ====================
 
-async function streamGroq(message, systemInstruction, sendEvent) {
+async function callGroq(message, systemInstruction) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("Groq API key is missing");
 
@@ -106,43 +76,19 @@ async function streamGroq(message, systemInstruction, sendEvent) {
       ],
       temperature: 0.7,
       max_tokens: 1024,
-      stream: true,
     }),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Groq Error: ${response.status} - ${errorText}`);
+    const err = await response.text();
+    throw new Error(`Groq Error: ${response.status}`);
   }
 
-  let fullText = "";
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split("\n");
-
-    for (const line of lines) {
-      if (line.startsWith("data: ") && line !== "data: [DONE]") {
-        try {
-          const parsed = JSON.parse(line.slice(6));
-          const text = parsed.choices?.[0]?.delta?.content || "";
-          if (text) {
-            fullText += text;
-            sendEvent({ chunk: text });
-          }
-        } catch (e) {}
-      }
-    }
-  }
-  return fullText.trim();
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "No response";
 }
 
-async function streamGrok(message, systemInstruction, sendEvent) {
+async function callGrok(message, systemInstruction) {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("Grok API key is missing");
 
@@ -158,45 +104,21 @@ async function streamGrok(message, systemInstruction, sendEvent) {
         { role: "system", content: systemInstruction },
         { role: "user", content: message }
       ],
-      stream: true,
     }),
   });
 
   if (!response.ok) throw new Error(`Grok Error: ${response.status}`);
 
-  let fullText = "";
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split("\n");
-
-    for (const line of lines) {
-      if (line.startsWith("data: ") && line !== "data: [DONE]") {
-        try {
-          const parsed = JSON.parse(line.slice(6));
-          const text = parsed.choices?.[0]?.delta?.content || "";
-          if (text) {
-            fullText += text;
-            sendEvent({ chunk: text });
-          }
-        } catch (e) {}
-      }
-    }
-  }
-  return fullText.trim();
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "No response";
 }
 
-async function streamGemini(message, systemInstruction, sendEvent) {
+async function callGemini(message, systemInstruction) {
   const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Gemini API key is missing");
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -209,12 +131,6 @@ async function streamGemini(message, systemInstruction, sendEvent) {
 
   if (!response.ok) throw new Error(`Gemini Error: ${response.status}`);
 
-  let fullText = "";
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk =
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "No response";
+}
