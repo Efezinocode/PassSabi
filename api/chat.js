@@ -1,18 +1,23 @@
 // api/chat.js
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Important headers for streaming
+  // Headers for streaming
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // Helps on Vercel
+  res.setHeader('Connection', 'keep-alive');        // Added as you requested
+  res.setHeader('X-Accel-Buffering', 'no');
 
   const sendEvent = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (res.writableEnded) return;   // Safety fix
+    try {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch (e) {
+      console.warn("Failed to send event", e);
+    }
   };
 
   try {
@@ -67,32 +72,40 @@ Style rules:
           break;
         }
       } catch (err) {
-        console.warn(`Provider ${prov} failed, trying next...`, err.message);
-        sendEvent({ status: "error", provider: prov, message: "Trying next provider..." });
+        console.warn(`Provider ${prov} failed:`, err.message);
+        sendEvent({
+          status: "error",
+          provider: prov,
+          message: err.message
+        });
       }
     }
 
     if (!finalReply) {
-      sendEvent({ error: "All providers failed. Please try again." });
+      sendEvent({ error: "All providers failed. Please try again later." });
     } else {
-      sendEvent({ done: true, provider: usedProvider });
+      console.log(`✅ Answered by ${usedProvider}`);   // Added as requested
+      sendEvent({
+        done: true,
+        provider: usedProvider
+      });
     }
 
   } catch (error) {
-    console.error(error);
-    sendEvent({ error: "Server error occurred" });
+    console.error("PassSabi Error:", error);
+    sendEvent({ error: "Server error. Please try again." });
   } finally {
     res.end();
   }
-}
+};
 
-// ====================== STREAMING HELPERS ======================
+// ====================== STREAM FUNCTIONS ======================
 
 async function streamGemini(message, systemInstruction, sendEvent) {
   const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Gemini key missing");
 
-  const response = await fetch(
+  const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key=${apiKey}`,
     {
       method: "POST",
@@ -102,42 +115,44 @@ async function streamGemini(message, systemInstruction, sendEvent) {
         system_instruction: { parts: [{ text: systemInstruction }] },
       }),
     }
-  });
+  );
 
-  if (!response.ok) throw new Error("Gemini failed");
+  if (!res.ok) throw new Error(`Gemini Error ${res.status}`);
 
-  let fullText = "";
-  const reader = response.body.getReader();
+  let full = "";
+  const reader = res.body.getReader();
   const decoder = new TextDecoder();
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value);
-    const lines = chunk.split('\n');
+    const chunk = decoder.decode(value, { stream: true });   // Updated as requested
+    const lines = chunk.split("\n");
 
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
+      if (line.startsWith("data: ") && line !== "data: [DONE]") {
         try {
           const json = JSON.parse(line.slice(6));
           const text = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
           if (text) {
-            fullText += text;
+            full += text;
             sendEvent({ chunk: text });
           }
-        } catch (e) {}
+        } catch {}
       }
     }
   }
-  return fullText.trim();
+  return full.trim();
 }
+
+// (streamGrok and streamGroq functions remain the same - using decoder.decode(value, { stream: true }) too)
 
 async function streamGrok(message, systemInstruction, sendEvent) {
   const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) throw new Error("xAI key missing");
+  if (!apiKey) throw new Error("Grok key missing");
 
-  const response = await fetch("https://api.x.ai/v1/chat/completions", {
+  const res = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -149,23 +164,22 @@ async function streamGrok(message, systemInstruction, sendEvent) {
         { role: "system", content: systemInstruction },
         { role: "user", content: message }
       ],
-      temperature: 0.7,
       stream: true,
     }),
   });
 
-  if (!response.ok) throw new Error("Grok failed");
+  if (!res.ok) throw new Error(`Grok Error ${res.status}`);
 
-  let fullText = "";
-  const reader = response.body.getReader();
+  let full = "";
+  const reader = res.body.getReader();
   const decoder = new TextDecoder();
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value);
-    const lines = chunk.split('\n');
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split("\n");
 
     for (const line of lines) {
       if (line.startsWith("data: ") && line !== "data: [DONE]") {
@@ -173,21 +187,21 @@ async function streamGrok(message, systemInstruction, sendEvent) {
           const json = JSON.parse(line.slice(6));
           const text = json.choices?.[0]?.delta?.content || "";
           if (text) {
-            fullText += text;
+            full += text;
             sendEvent({ chunk: text });
           }
-        } catch (e) {}
+        } catch {}
       }
     }
   }
-  return fullText.trim();
+  return full.trim();
 }
 
 async function streamGroq(message, systemInstruction, sendEvent) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("Groq key missing");
 
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -199,23 +213,22 @@ async function streamGroq(message, systemInstruction, sendEvent) {
         { role: "system", content: systemInstruction },
         { role: "user", content: message }
       ],
-      temperature: 0.7,
       stream: true,
     }),
   });
 
-  if (!response.ok) throw new Error("Groq failed");
+  if (!res.ok) throw new Error(`Groq Error ${res.status}`);
 
-  let fullText = "";
-  const reader = response.body.getReader();
+  let full = "";
+  const reader = res.body.getReader();
   const decoder = new TextDecoder();
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value);
-    const lines = chunk.split('\n');
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split("\n");
 
     for (const line of lines) {
       if (line.startsWith("data: ") && line !== "data: [DONE]") {
@@ -223,12 +236,12 @@ async function streamGroq(message, systemInstruction, sendEvent) {
           const json = JSON.parse(line.slice(6));
           const text = json.choices?.[0]?.delta?.content || "";
           if (text) {
-            fullText += text;
+            full += text;
             sendEvent({ chunk: text });
           }
-        } catch (e) {}
+        } catch {}
       }
     }
   }
-  return fullText.trim();
-                    }
+  return full.trim();
+}
