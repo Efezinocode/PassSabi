@@ -1,4 +1,4 @@
-// script.js
+// script.js - Final Version with your requested improvements
 
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
@@ -47,7 +47,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const message = input.value.trim();
     if (message === "") return;
 
-    // Add user message
     const userMsg = { role: "user", text: message, ts: Date.now() };
     messages.push(userMsg);
     saveMessages(messages);
@@ -57,9 +56,7 @@ document.addEventListener("DOMContentLoaded", function () {
     input.disabled = true;
     if (sendBtn) sendBtn.disabled = true;
 
-    // Add typing indicator
-    const typingElement = appendTypingIndicator();
-
+    appendMessage({ role: "assistant", text: "", typing: true, ts: Date.now() });
     chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
 
     try {
@@ -69,26 +66,26 @@ document.addEventListener("DOMContentLoaded", function () {
         body: JSON.stringify({ message }),
       });
 
+      // Improved error handling as you requested
       if (!response.ok) {
-        throw new Error("Failed to get response");
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullReply = "";
 
-      // Remove typing indicator
       removeTypingPlaceholders();
 
-      // Create assistant message bubble
-      const assistantMsgElement = createAssistantBubble();
-      let currentText = "";
+      const assistantBubble = createStreamingBubble();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
+        // Improved decoder as you requested
+        const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split("\n");
 
         for (const line of lines) {
@@ -101,25 +98,17 @@ document.addEventListener("DOMContentLoaded", function () {
               }
 
               if (data.chunk) {
-                currentText += data.chunk;
                 fullReply += data.chunk;
-                updateAssistantBubble(assistantMsgElement, currentText);
-              }
-
-              if (data.done) {
-                // Final message with provider info (optional)
-                console.log(`Answered by: ${data.provider}`);
+                updateStreamingBubble(assistantBubble, fullReply);
               }
             } catch (e) {
-              // Ignore parsing errors for incomplete chunks
+              console.warn("Streaming parse error:", e);   // Improved as requested
             }
           }
         }
-
         chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
       }
 
-      // Save final message
       const assistantMsg = { role: "assistant", text: fullReply.trim(), ts: Date.now() };
       messages.push(assistantMsg);
       saveMessages(messages);
@@ -145,52 +134,45 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Helper Functions
   function appendMessage(msg) {
     const row = document.createElement("div");
     row.className = `chat-row ${msg.role}`;
 
     const bubble = document.createElement("div");
     bubble.className = "chat-bubble";
-    bubble.textContent = cleanReply(msg.text);
+
+    if (msg.typing) {
+      bubble.classList.add("typing");
+      bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+    } else {
+      bubble.textContent = cleanReply(msg.text);
+    }
 
     row.appendChild(bubble);
     chatBox.appendChild(row);
   }
 
-  function appendTypingIndicator() {
+  function createStreamingBubble() {
     const row = document.createElement("div");
     row.className = "chat-row assistant";
-
-    const bubble = document.createElement("div");
-    bubble.className = "chat-bubble typing";
-    bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
-
-    row.appendChild(bubble);
-    chatBox.appendChild(row);
-    return row;
-  }
-
-  function createAssistantBubble() {
-    const row = document.createElement("div");
-    row.className = "chat-row assistant";
-
     const bubble = document.createElement("div");
     bubble.className = "chat-bubble";
     bubble.textContent = "";
-
     row.appendChild(bubble);
     chatBox.appendChild(row);
     return bubble;
   }
 
-  function updateAssistantBubble(bubble, text) {
+  function updateStreamingBubble(bubble, text) {
     bubble.textContent = cleanReply(text);
   }
 
   function removeTypingPlaceholders() {
     chatBox.querySelectorAll(".chat-row.assistant .chat-bubble.typing")
-      .forEach(ph => ph.closest(".chat-row").remove());
+      .forEach(ph => {
+        const row = ph.closest(".chat-row");
+        if (row) row.remove();
+      });
   }
 
   function renderMessages(list) {
