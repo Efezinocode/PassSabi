@@ -1,52 +1,8 @@
-// script.js - Final Version with your requested improvements
-
-document.addEventListener("DOMContentLoaded", function () {
-  const btn = document.getElementById("btn");
-  const sendBtn = document.getElementById("sendBtn");
-  const input = document.getElementById("userInput");
-  const chatBox = document.getElementById("chat-box");
-  const clearBtn = document.getElementById("clearBtn");
-  const form = document.getElementById("chat-form");
-  const STORAGE_KEY = "passsabi_messages_v1";
-
-  if (btn) {
-    btn.addEventListener("click", function () {
-      window.location.href = "chat.html";
-    });
-  }
-
-  if (!chatBox || !input || !form) return;
-
-  let messages = loadMessages();
-  renderMessages(messages);
-
-  input.focus();
-
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-    sendMessage();
-  });
-
-  if (clearBtn) {
-    clearBtn.addEventListener("click", function () {
-      if (!confirm("Clear chat history?")) return;
-      messages = [];
-      saveMessages(messages);
-      chatBox.innerHTML = "";
-    });
-  }
-
-  input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      sendMessage();
-    }
-  });
-
   async function sendMessage() {
     const message = input.value.trim();
     if (message === "") return;
 
+    // 1. Update UI for sending
     const userMsg = { role: "user", text: message, ts: Date.now() };
     messages.push(userMsg);
     saveMessages(messages);
@@ -56,62 +12,39 @@ document.addEventListener("DOMContentLoaded", function () {
     input.disabled = true;
     if (sendBtn) sendBtn.disabled = true;
 
+    // 2. Add temporary typing indicator
     appendMessage({ role: "assistant", text: "", typing: true, ts: Date.now() });
     chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
 
     try {
+      // 3. Send request expecting a standard JSON response
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
 
-      // Improved error handling as you requested
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status}`);
+        throw new Error(data.error || `Server error: ${response.status}`);
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullReply = "";
-
+      // 4. Success: remove indicator and show result
       removeTypingPlaceholders();
 
-      const assistantBubble = createStreamingBubble();
+      // Ensure 'data.reply' matches the property name your backend sends
+      const fullReply = data.reply || data.text || "No response content.";
+      
+      const assistantMsg = { 
+        role: "assistant", 
+        text: fullReply.trim(), 
+        ts: Date.now() 
+      };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        // Improved decoder as you requested
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.error) {
-                throw new Error(data.error);
-              }
-
-              if (data.chunk) {
-                fullReply += data.chunk;
-                updateStreamingBubble(assistantBubble, fullReply);
-              }
-            } catch (e) {
-              console.warn("Streaming parse error:", e);   // Improved as requested
-            }
-          }
-        }
-        chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
-      }
-
-      const assistantMsg = { role: "assistant", text: fullReply.trim(), ts: Date.now() };
       messages.push(assistantMsg);
       saveMessages(messages);
+      appendMessage(assistantMsg);
 
     } catch (err) {
       console.error("Chat error:", err);
@@ -123,8 +56,8 @@ document.addEventListener("DOMContentLoaded", function () {
         ts: Date.now(),
       };
 
-      messages.push(errMsg);
-      saveMessages(messages);
+      // Optional: Add error to history? 
+      // messages.push(errMsg); // Keep this if you want errors in history
       appendMessage(errMsg);
     } finally {
       input.disabled = false;
@@ -134,79 +67,4 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  function appendMessage(msg) {
-    const row = document.createElement("div");
-    row.className = `chat-row ${msg.role}`;
 
-    const bubble = document.createElement("div");
-    bubble.className = "chat-bubble";
-
-    if (msg.typing) {
-      bubble.classList.add("typing");
-      bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
-    } else {
-      bubble.textContent = cleanReply(msg.text);
-    }
-
-    row.appendChild(bubble);
-    chatBox.appendChild(row);
-  }
-
-  function createStreamingBubble() {
-    const row = document.createElement("div");
-    row.className = "chat-row assistant";
-    const bubble = document.createElement("div");
-    bubble.className = "chat-bubble";
-    bubble.textContent = "";
-    row.appendChild(bubble);
-    chatBox.appendChild(row);
-    return bubble;
-  }
-
-  function updateStreamingBubble(bubble, text) {
-    bubble.textContent = cleanReply(text);
-  }
-
-  function removeTypingPlaceholders() {
-    chatBox.querySelectorAll(".chat-row.assistant .chat-bubble.typing")
-      .forEach(ph => {
-        const row = ph.closest(".chat-row");
-        if (row) row.remove();
-      });
-  }
-
-  function renderMessages(list) {
-    chatBox.innerHTML = "";
-    list.forEach((m) => appendMessage(m));
-    chatBox.scrollTo({ top: chatBox.scrollHeight });
-  }
-
-  function saveMessages(list) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    } catch (e) {
-      console.warn("Could not save messages", e);
-    }
-  }
-
-  function loadMessages() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  function cleanReply(text) {
-    return String(text || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/^#{1,6}\s+/gm, "")
-      .replace(/\*\*(.*?)\*\*/g, "$1")
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/^\s*[*-]\s+/gm, "• ")
-      .trim();
-  }
-});
