@@ -1,4 +1,4 @@
-// script.js - Final Version with your requested improvements
+// script.js - non-streaming version
 
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", function () {
     input.disabled = true;
     if (sendBtn) sendBtn.disabled = true;
 
-    appendMessage({ role: "assistant", text: "", typing: true, ts: Date.now() });
+    appendTypingIndicator();
     chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
 
     try {
@@ -66,53 +66,30 @@ document.addEventListener("DOMContentLoaded", function () {
         body: JSON.stringify({ message }),
       });
 
-      // Improved error handling as you requested
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status}`);
+      const raw = await response.text();
+
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {};
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullReply = "";
+      if (!response.ok) {
+        throw new Error(data.error || data.details || raw || `HTTP ${response.status}`);
+      }
 
       removeTypingPlaceholders();
 
-      const assistantBubble = createStreamingBubble();
+      const assistantMsg = {
+        role: "assistant",
+        text: cleanReply(data.reply || "No response."),
+        ts: Date.now(),
+      };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        // Improved decoder as you requested
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.error) {
-                throw new Error(data.error);
-              }
-
-              if (data.chunk) {
-                fullReply += data.chunk;
-                updateStreamingBubble(assistantBubble, fullReply);
-              }
-            } catch (e) {
-              console.warn("Streaming parse error:", e);   // Improved as requested
-            }
-          }
-        }
-        chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
-      }
-
-      const assistantMsg = { role: "assistant", text: fullReply.trim(), ts: Date.now() };
       messages.push(assistantMsg);
       saveMessages(messages);
-
+      appendMessage(assistantMsg);
     } catch (err) {
       console.error("Chat error:", err);
       removeTypingPlaceholders();
@@ -143,7 +120,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (msg.typing) {
       bubble.classList.add("typing");
-      bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+      bubble.innerHTML =
+        '<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
     } else {
       bubble.textContent = cleanReply(msg.text);
     }
@@ -152,24 +130,14 @@ document.addEventListener("DOMContentLoaded", function () {
     chatBox.appendChild(row);
   }
 
-  function createStreamingBubble() {
-    const row = document.createElement("div");
-    row.className = "chat-row assistant";
-    const bubble = document.createElement("div");
-    bubble.className = "chat-bubble";
-    bubble.textContent = "";
-    row.appendChild(bubble);
-    chatBox.appendChild(row);
-    return bubble;
-  }
-
-  function updateStreamingBubble(bubble, text) {
-    bubble.textContent = cleanReply(text);
+  function appendTypingIndicator() {
+    appendMessage({ role: "assistant", text: "", typing: true, ts: Date.now() });
   }
 
   function removeTypingPlaceholders() {
-    chatBox.querySelectorAll(".chat-row.assistant .chat-bubble.typing")
-      .forEach(ph => {
+    chatBox
+      .querySelectorAll(".chat-row.assistant .chat-bubble.typing")
+      .forEach((ph) => {
         const row = ph.closest(".chat-row");
         if (row) row.remove();
       });
