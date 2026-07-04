@@ -11,63 +11,82 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 
-<body>
+<body class="chat-page">
 
-<header>
-  <nav class="navbar" aria-label="Main Navigation">
+  <header class="chat-topbar">
+    <button
+      id="menuBtn"
+      type="button"
+      class="menu-button"
+      aria-label="Open menu"
+      aria-expanded="false"
+      aria-controls="sidebar">
+      ☰
+    </button>
+
     <h2>🎓 PassSabi AI</h2>
+  </header>
 
-    <div class="nav-links">
+  <div id="backdrop" class="backdrop" aria-hidden="true"></div>
+
+  <aside id="sidebar" class="sidebar" aria-hidden="true">
+    <div class="sidebar-header">
+      <h3>PassSabi AI</h3>
+      <p>Your Personal AI Teacher</p>
+    </div>
+
+    <button id="newChatBtn" type="button" class="sidebar-action">
+      + New Chat
+    </button>
+
+    <nav class="sidebar-nav" aria-label="Sidebar navigation">
       <a href="index.html">Home</a>
       <a href="about.html">About</a>
       <a href="contact.html">Contact</a>
-      <a href="chat.html" aria-current="page">Chat</a>
+    </nav>
+
+    <section class="sidebar-section">
+      <h4>Chat History</h4>
+      <div id="chat-history" class="history-list"></div>
+    </section>
+
+    <div class="sidebar-footer">
+      Founded by <strong>Efezino Uzezi</strong>
+    </div>
+  </aside>
+
+  <main class="chat-container">
+    <section id="welcome-screen" class="welcome-screen" hidden>
+      <div class="welcome-card">
+        <h1>PassSabi AI</h1>
+        <p>How can I help you today?</p>
+      </div>
+    </section>
+
+    <div
+      id="chat-box"
+      role="log"
+      aria-live="polite"
+      aria-label="Chat messages">
     </div>
 
-  </nav>
-</header>
+    <div class="chat-footer">
+      <form id="chat-form" autocomplete="off">
+        <input
+          type="text"
+          id="userInput"
+          placeholder="Type your question here..."
+          required
+          spellcheck="false"
+          autocomplete="off">
 
-<main class="chat-container">
+        <button id="sendBtn" type="submit">
+          Send
+        </button>
+      </form>
+    </div>
+  </main>
 
-  <div
-    id="chat-box"
-    role="log"
-    aria-live="polite"
-    aria-label="Chat messages">
-  </div>
-
-  <div class="chat-footer">
-
-    <button
-      id="clearBtn"
-      type="button"
-      title="Clear chat">
-      Clear
-    </button>
-
-    <form id="chat-form" autocomplete="off">
-
-      <input
-        type="text"
-        id="userInput"
-        placeholder="Type your question here..."
-        required
-        spellcheck="false"
-        autocomplete="off">
-
-      <button
-        id="sendBtn"
-        type="submit">
-        Send
-      </button>
-
-    </form>
-
-  </div>
-
-</main>
-
-<script src="js/script.js"></script>
-
+  <script src="js/script.js"></script>
 </body>
 </html>
