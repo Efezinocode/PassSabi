@@ -3,35 +3,71 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>PassSabi AI Chat | Your Personal AI Teacher</title>
-  <meta name="description" content="Chat with PassSabi AI to get explanations, homework help, and exam preparation.">
+
+  <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations and learning support.">
+
   <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
-  <header>
-    <nav class="navbar" aria-label="Main Navigation">
-      <h2>🎓 PassSabi AI</h2>
-      <div class="nav-links">
-        <a href="index.html">Home</a>
-        <a href="about.html">About</a>
-        <a href="contact.html">Contact</a>
-        <a href="chat.html" aria-current="page">Chat</a>
-      </div>
-    </nav>
-  </header>
 
-  <main class="chat-container">
-    <div id="chat-box" role="log" aria-live="polite"></div>
+<header>
+  <nav class="navbar" aria-label="Main Navigation">
+    <h2>🎓 PassSabi AI</h2>
 
-    <div class="chat-footer">
-      <button id="clearBtn" title="Clear chat">Clear</button>
-      <form id="chat-form">
-        <input type="text" id="userInput" placeholder="Type your question here..." autocomplete="off" />
-        <button id="sendBtn" type="submit">Send</button>
-      </form>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a href="chat.html" aria-current="page">Chat</a>
     </div>
-  </main>
 
-  <script src="js/script.js"></script>
+  </nav>
+</header>
+
+<main class="chat-container">
+
+  <div
+    id="chat-box"
+    role="log"
+    aria-live="polite"
+    aria-label="Chat messages">
+  </div>
+
+  <div class="chat-footer">
+
+    <button
+      id="clearBtn"
+      type="button"
+      title="Clear chat">
+      Clear
+    </button>
+
+    <form id="chat-form" autocomplete="off">
+
+      <input
+        type="text"
+        id="userInput"
+        placeholder="Type your question here..."
+        required
+        spellcheck="false"
+        autocomplete="off">
+
+      <button
+        id="sendBtn"
+        type="submit">
+        Send
+      </button>
+
+    </form>
+
+  </div>
+
+</main>
+
+<script src="js/script.js"></script>
+
 </body>
 </html>
