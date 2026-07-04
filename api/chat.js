@@ -99,16 +99,21 @@ async function streamGroq(message, systemInstruction, sendEvent) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "llama-3.1-70b-versatile",   // ← Fixed (no longer deprecated)
+      model: "llama-3.1-70b-versatile",
       messages: [
         { role: "system", content: systemInstruction },
         { role: "user", content: message }
       ],
+      temperature: 0.7,
+      max_tokens: 1024,
       stream: true,
     }),
   });
 
-  if (!response.ok) throw new Error(`Groq Error: ${response.status}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Groq Error: ${response.status} - ${errorText}`);
+  }
 
   let fullText = "";
   const reader = response.body.getReader();
@@ -137,7 +142,6 @@ async function streamGroq(message, systemInstruction, sendEvent) {
   return fullText.trim();
 }
 
-// Keep your other two functions (streamGrok and streamGemini) as they are
 async function streamGrok(message, systemInstruction, sendEvent) {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("Grok API key is missing");
@@ -213,21 +217,4 @@ async function streamGemini(message, systemInstruction, sendEvent) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split("\n");
-
-    for (const line of lines) {
-      if (line.startsWith("data: ") && line !== "data: [DONE]") {
-        try {
-          const parsed = JSON.parse(line.slice(6));
-          const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          if (text) {
-            fullText += text;
-            sendEvent({ chunk: text });
-          }
-        } catch (e) {}
-      }
-    }
-  }
-  return fullText.trim();
-        }
+    const chunk =
