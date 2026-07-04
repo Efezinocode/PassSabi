@@ -1,13 +1,22 @@
-// script.js - non-streaming version
+// script.js - PassSabi AI chat, non-streaming, sidebar, chat history
 
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
   const sendBtn = document.getElementById("sendBtn");
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chat-box");
-  const clearBtn = document.getElementById("clearBtn");
   const form = document.getElementById("chat-form");
-  const STORAGE_KEY = "passsabi_messages_v1";
+
+  const menuBtn = document.getElementById("menuBtn");
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("backdrop");
+  const newChatBtn = document.getElementById("newChatBtn");
+  const historyList = document.getElementById("chat-history");
+  const welcomeScreen = document.getElementById("welcome-screen");
+
+  const STORAGE_KEY = "passsabi_chat_sessions_v1";
+  const CURRENT_CHAT_KEY = "passsabi_current_chat_id_v1";
+  const LEGACY_MESSAGES_KEY = "passsabi_messages_v1";
 
   if (btn) {
     btn.addEventListener("click", function () {
@@ -17,24 +26,50 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (!chatBox || !input || !form) return;
 
-  let messages = loadMessages();
-  renderMessages(messages);
+  let sessions = loadSessions();
+  let currentChatId = loadCurrentChatId();
 
+  if (sessions.length === 0) {
+    const migrated = migrateLegacyMessages();
+    if (migrated) {
+      sessions.push(migrated);
+    } else {
+      sessions.push(createSession("New Chat"));
+    }
+    currentChatId = sessions[0].id;
+    saveSessions();
+    saveCurrentChatId();
+  } else if (!currentChatId || !sessions.some((session) => session.id === currentChatId)) {
+    currentChatId = sessions[0].id;
+    saveCurrentChatId();
+  }
+
+  renderCurrentSession();
+  renderHistory();
+  updateWelcomeState();
   input.focus();
+
+  if (menuBtn && sidebar && backdrop) {
+    menuBtn.addEventListener("click", toggleSidebar);
+    backdrop.addEventListener("click", closeSidebar);
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        closeSidebar();
+      }
+    });
+  }
+
+  if (newChatBtn) {
+    newChatBtn.addEventListener("click", function () {
+      startNewChat();
+    });
+  }
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     sendMessage();
   });
-
-  if (clearBtn) {
-    clearBtn.addEventListener("click", function () {
-      if (!confirm("Clear chat history?")) return;
-      messages = [];
-      saveMessages(messages);
-      chatBox.innerHTML = "";
-    });
-  }
 
   input.addEventListener("keydown", function (event) {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -47,17 +82,33 @@ document.addEventListener("DOMContentLoaded", function () {
     const message = input.value.trim();
     if (message === "") return;
 
-    const userMsg = { role: "user", text: message, ts: Date.now() };
-    messages.push(userMsg);
-    saveMessages(messages);
+    const session = getCurrentSession();
+    if (!session) return;
+
+    const userMsg = {
+      role: "user",
+      text: message,
+      ts: Date.now(),
+    };
+
+    session.messages.push(userMsg);
+
+    if (session.title === "New Chat") {
+      session.title = makeSessionTitle(message);
+    }
+
+    session.updatedAt = Date.now();
+    saveSessions();
     appendMessage(userMsg);
+    renderHistory();
+    updateWelcomeState();
 
     input.value = "";
     input.disabled = true;
     if (sendBtn) sendBtn.disabled = true;
 
     appendTypingIndicator();
-    chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
+    scrollToBottom();
 
     try {
       const response = await fetch("/api/chat", {
@@ -87,9 +138,12 @@ document.addEventListener("DOMContentLoaded", function () {
         ts: Date.now(),
       };
 
-      messages.push(assistantMsg);
-      saveMessages(messages);
+      session.messages.push(assistantMsg);
+      session.updatedAt = Date.now();
+      saveSessions();
       appendMessage(assistantMsg);
+      renderHistory();
+      updateWelcomeState();
     } catch (err) {
       console.error("Chat error:", err);
       removeTypingPlaceholders();
@@ -100,14 +154,12 @@ document.addEventListener("DOMContentLoaded", function () {
         ts: Date.now(),
       };
 
-      messages.push(errMsg);
-      saveMessages(messages);
       appendMessage(errMsg);
     } finally {
       input.disabled = false;
       if (sendBtn) sendBtn.disabled = false;
       input.focus();
-      chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
+      scrollToBottom();
     }
   }
 
@@ -143,28 +195,192 @@ document.addEventListener("DOMContentLoaded", function () {
       });
   }
 
-  function renderMessages(list) {
+  function renderCurrentSession() {
+    const session = getCurrentSession();
     chatBox.innerHTML = "";
-    list.forEach((m) => appendMessage(m));
-    chatBox.scrollTo({ top: chatBox.scrollHeight });
+
+    if (!session) {
+      updateWelcomeState();
+      return;
+    }
+
+    session.messages.forEach((msg) => appendMessage(msg));
+    scrollToBottom();
   }
 
-  function saveMessages(list) {
+  function renderHistory() {
+    if (!historyList) return;
+
+    historyList.innerHTML = "";
+
+    const ordered = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+
+    if (ordered.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "history-empty";
+      empty.textContent = "No chats yet.";
+      historyList.appendChild(empty);
+      return;
+    }
+
+    ordered.forEach((session) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = `history-item ${session.id === currentChatId ? "active" : ""}`;
+      item.textContent = session.title || "New Chat";
+
+      item.addEventListener("click", function () {
+        switchSession(session.id);
+      });
+
+      historyList.appendChild(item);
+    });
+  }
+
+  function switchSession(sessionId) {
+    currentChatId = sessionId;
+    saveCurrentChatId();
+    renderCurrentSession();
+    renderHistory();
+    updateWelcomeState();
+    closeSidebar();
+    input.focus();
+  }
+
+  function startNewChat() {
+    const newSession = createSession("New Chat");
+    sessions.unshift(newSession);
+    currentChatId = newSession.id;
+
+    saveCurrentChatId();
+    saveSessions();
+
+    renderCurrentSession();
+    renderHistory();
+    updateWelcomeState();
+    closeSidebar();
+    input.focus();
+  }
+
+  function getCurrentSession() {
+    return sessions.find((session) => session.id === currentChatId) || null;
+  }
+
+  function createSession(title) {
+    return {
+      id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      title,
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+  }
+
+  function makeSessionTitle(message) {
+    const clean = String(message || "").replace(/\s+/g, " ").trim();
+    if (!clean) return "New Chat";
+    return clean.length > 28 ? `${clean.slice(0, 28).trim()}…` : clean;
+  }
+
+  function migrateLegacyMessages() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    } catch (e) {
-      console.warn("Could not save messages", e);
+      const raw = localStorage.getItem(LEGACY_MESSAGES_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+      const firstUser = parsed.find((m) => m && m.role === "user" && typeof m.text === "string");
+      const title = firstUser ? makeSessionTitle(firstUser.text) : "Imported Chat";
+
+      return {
+        id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        title,
+        messages: parsed.filter((m) => m && typeof m.text === "string"),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+    } catch {
+      return null;
     }
   }
 
-  function loadMessages() {
+  function loadSessions() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((session) => session && session.id && Array.isArray(session.messages));
+    } catch {
       return [];
+    }
+  }
+
+  function saveSessions() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    } catch (e) {
+      console.warn("Could not save chat sessions", e);
+    }
+  }
+
+  function loadCurrentChatId() {
+    try {
+      return localStorage.getItem(CURRENT_CHAT_KEY) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function saveCurrentChatId() {
+    try {
+      localStorage.setItem(CURRENT_CHAT_KEY, currentChatId);
+    } catch (e) {
+      console.warn("Could not save current chat id", e);
+    }
+  }
+
+  function updateWelcomeState() {
+    const session = getCurrentSession();
+    const hasMessages = !!(session && session.messages.length > 0);
+
+    if (welcomeScreen) {
+      welcomeScreen.hidden = hasMessages;
+    }
+
+    document.body.classList.toggle("has-messages", hasMessages);
+  }
+
+  function scrollToBottom() {
+    chatBox.scrollTo({
+      top: chatBox.scrollHeight,
+      behavior: "smooth",
+    });
+  }
+
+  function openSidebar() {
+    if (!sidebar || !backdrop || !menuBtn) return;
+    sidebar.classList.add("open");
+    backdrop.classList.add("show");
+    sidebar.setAttribute("aria-hidden", "false");
+    menuBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function closeSidebar() {
+    if (!sidebar || !backdrop || !menuBtn) return;
+    sidebar.classList.remove("open");
+    backdrop.classList.remove("show");
+    sidebar.setAttribute("aria-hidden", "true");
+    menuBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleSidebar() {
+    if (!sidebar) return;
+    if (sidebar.classList.contains("open")) {
+      closeSidebar();
+    } else {
+      openSidebar();
     }
   }
 
