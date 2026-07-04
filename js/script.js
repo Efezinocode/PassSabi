@@ -1,70 +1,137 @@
-  async function sendMessage() {
-    const message = input.value.trim();
-    if (message === "") return;
+// api/chat.js - Non-Streaming Version (Fixed and Stabilized)
 
-    // 1. Update UI for sending
-    const userMsg = { role: "user", text: message, ts: Date.now() };
-    messages.push(userMsg);
-    saveMessages(messages);
-    appendMessage(userMsg);
-
-    input.value = "";
-    input.disabled = true;
-    if (sendBtn) sendBtn.disabled = true;
-
-    // 2. Add temporary typing indicator
-    appendMessage({ role: "assistant", text: "", typing: true, ts: Date.now() });
-    chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
-
-    try {
-      // 3. Send request expecting a standard JSON response
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `Server error: ${response.status}`);
-      }
-
-      // 4. Success: remove indicator and show result
-      removeTypingPlaceholders();
-
-      // Ensure 'data.reply' matches the property name your backend sends
-      const fullReply = data.reply || data.text || "No response content.";
-      
-      const assistantMsg = { 
-        role: "assistant", 
-        text: fullReply.trim(), 
-        ts: Date.now() 
-      };
-
-      messages.push(assistantMsg);
-      saveMessages(messages);
-      appendMessage(assistantMsg);
-
-    } catch (err) {
-      console.error("Chat error:", err);
-      removeTypingPlaceholders();
-
-      const errMsg = {
-        role: "assistant",
-        text: err.message || "Sorry, something went wrong. Please try again.",
-        ts: Date.now(),
-      };
-
-      // Optional: Add error to history? 
-      // messages.push(errMsg); // Keep this if you want errors in history
-      appendMessage(errMsg);
-    } finally {
-      input.disabled = false;
-      if (sendBtn) sendBtn.disabled = false;
-      input.focus();
-      chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
-    }
+module.exports = async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
+  try {
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const { message, provider = "groq" } = body;
 
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    const trimmedMessage = message.trim();
+
+    const systemInstruction = `
+You are PassSabi AI, a friendly AI teacher for students.
+
+Facts about you:
+- Your name is PassSabi AI.
+- You were founded by Efezino Uzezi.
+- You help students with classwork, homework, WAEC, NECO, JAMB, GCE, NABTEB, and other school exams.
+
+Style rules:
+- Answer clearly and step by step.
+- Be helpful, calm, and professional.
+- Do not greet with a welcome message.
+- Do not say you are under development.
+- Do not use markdown, asterisks, hashtags, or code fences.
+- Use plain text only.
+- If a list is needed, use simple numbered lines like 1. 2. 3.
+- If asked who founded PassSabi AI, answer: Efezino Uzezi.
+    `.trim();
+
+    let reply = "";
+    let usedProvider = "";
+
+    if (provider === "groq" || provider === "default") {
+      reply = await callGroq(trimmedMessage, systemInstruction);
+      usedProvider = "groq";
+    } else if (provider === "grok") {
+      reply = await callGrok(trimmedMessage, systemInstruction);
+      usedProvider = "grok";
+    } else {
+      reply = await callGemini(trimmedMessage, systemInstruction);
+      usedProvider = "gemini";
+    }
+
+    return res.status(200).json({ reply, provider: usedProvider });
+
+  } catch (error) {
+    console.error("PassSabi Error:", error);
+    return res.status(500).json({ error: error.message || "Server error. Please try again." });
+  }
+};
+
+// ==================== SIMPLE API CALLS ====================
+
+async function callGroq(message, systemInstruction) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("Groq API key is missing");
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile", // Fixed deprecated model
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: message }
+      ],
+      temperature: 0.7,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error("Groq API Rejected Request:", errText); // Added detailed logging
+    throw new Error(`Groq Error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "No response";
+}
+
+async function callGrok(message, systemInstruction) {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) throw new Error("Grok API key is missing");
+
+  const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "grok-beta", // Standardized to common model
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: message }
+      ],
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Grok Error: ${response.status}`);
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "No response";
+}
+
+async function callGemini(message, systemInstruction) {
+  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Gemini API key is missing");
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: message }] }],
+        system_instruction: { parts: [{ text: systemInstruction }] },
+      }),
+    }
+  );
+
+  if (!response.ok) throw new Error(`Gemini Error: ${response.status}`);
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "No response";
+        }
