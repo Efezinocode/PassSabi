@@ -211,6 +211,7 @@ a:hover {
     font-style: italic;
 }
 
+
 .chat-footer {
     position: fixed;
     left: 0;
@@ -219,28 +220,23 @@ a:hover {
     background: rgba(15, 23, 42, 0.98);
     padding: 10px 12px;
     box-shadow: 0 -1px 8px rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    gap: 8px;
     max-width: 760px;
     margin: 0 auto;
 }
 
-#chat-form {
-    display: flex;
-    gap: 8px;
+.chat-input-wrap {
+    position: relative;
     width: 100%;
+    display: flex;
     align-items: center;
 }
 
 #userInput {
-    flex: 1;
-    width: auto;
+    width: 100%;
     margin-bottom: 0;
-    min-width: 0;
-    padding: 14px;
+    padding: 14px 58px 14px 16px;
     font-size: 16px;
-    border-radius: 12px;
+    border-radius: 999px;
     border: 1px solid rgba(56, 189, 248, 0.45);
     outline: none;
     background: rgba(255, 255, 255, 0.96);
@@ -252,14 +248,22 @@ a:hover {
 }
 
 #sendBtn {
-    width: auto;
-    min-width: 92px;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 50%;
     background: #10b981;
     color: white;
-    border: none;
-    padding: 14px 16px;
-    border-radius: 12px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 1rem;
 }
 
 #sendBtn:hover {
@@ -334,8 +338,9 @@ a:hover {
     }
 
     #sendBtn {
-        min-width: 84px;
-        width: auto;
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
     }
 
     .chat-bubble {
@@ -345,7 +350,7 @@ a:hover {
     .sidebar {
         width: min(88vw, 320px);
     }
-}
+} 
 
 
 body.chat-page {
