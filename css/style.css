@@ -145,7 +145,7 @@ a:hover {
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 64px);
+    height: calc(100dvh - 64px);
 }
 
 #chat-box {
@@ -161,11 +161,12 @@ a:hover {
     gap: 14px;
     text-align: left;
     color: white;
-    padding-bottom: 140px;
-    scroll-padding-bottom: 140px;
+    padding-bottom: 180px;
+    scroll-padding-bottom: 180px;
 }
 
-.chat-row {
+
+.chat-row{
     display: flex;
     width: 100%;
 }
