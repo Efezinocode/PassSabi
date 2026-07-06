@@ -161,8 +161,8 @@ a:hover {
     gap: 14px;
     text-align: left;
     color: white;
-    padding-bottom: 180px;
-    scroll-padding-bottom: 180px;
+    padding-bottom: 220px;
+    scroll-padding-bottom: 220px;
 }
 
 
@@ -230,14 +230,35 @@ a:hover {
     display: flex;
     gap: 8px;
     width: 100%;
+    align-items: center;
+}
+
+#userInput {
+    flex: 1;
+    width: auto;
+    margin-bottom: 0;
+    min-width: 0;
+    padding: 14px;
+    font-size: 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    outline: none;
+    background: rgba(255, 255, 255, 0.96);
+    color: #0f172a;
+}
+
+#userInput:focus {
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.45);
 }
 
 #sendBtn {
+    width: auto;
+    min-width: 92px;
     background: #10b981;
     color: white;
     border: none;
-    padding: 10px 14px;
-    border-radius: 10px;
+    padding: 14px 16px;
+    border-radius: 12px;
     cursor: pointer;
 }
 
@@ -245,14 +266,7 @@ a:hover {
     background: #059669;
 }
 
-#clearBtn {
-    background: #ef4444;
-    color: white;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 10px;
-    cursor: pointer;
-}
+
 
 /* Typing dots */
 .typing-dots {
@@ -297,30 +311,39 @@ a:hover {
     }
 
     button {
-        width: 100%;
+        width: auto;
     }
 
     .chat-container {
-        height: auto;
-        min-height: calc(100vh - 48px);
+        height: calc(100dvh - 64px);
+        min-height: calc(100dvh - 64px);
     }
 
     .chat-footer {
-        flex-direction: column;
-        align-items: stretch;
+        padding: 10px 10px 12px;
     }
 
     #chat-form {
-        flex-direction: column;
+        flex-direction: row;
+        align-items: center;
     }
 
-    #sendBtn,
-    #clearBtn {
-        width: 100%;
+    #userInput {
+        flex: 1;
+        margin-bottom: 0;
+    }
+
+    #sendBtn {
+        min-width: 84px;
+        width: auto;
     }
 
     .chat-bubble {
         max-width: 92%;
+    }
+
+    .sidebar {
+        width: min(88vw, 320px);
     }
 }
 
@@ -691,4 +714,4 @@ body.chat-page {
     .sidebar {
         width: min(88vw, 320px);
     }
-    }
+    
