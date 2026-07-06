@@ -1,4 +1,4 @@
-// script.js - PassSabi AI chat, non-streaming, sidebar, chat history
+// script.js - PassSabi AI chat, non-streaming, sidebar, chat history, delete-one-history
 
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
@@ -33,6 +33,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const migrated = migrateLegacyMessages();
     if (migrated) {
       sessions.push(migrated);
+      try {
+        localStorage.removeItem(LEGACY_MESSAGES_KEY);
+      } catch (e) {
+        console.warn("Could not remove legacy messages", e);
+      }
     } else {
       sessions.push(createSession("New Chat"));
     }
@@ -224,16 +229,33 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     ordered.forEach((session) => {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.className = `history-item ${session.id === currentChatId ? "active" : ""}`;
-      item.textContent = session.title || "New Chat";
+      const row = document.createElement("div");
+      row.className = "history-item-row";
 
-      item.addEventListener("click", function () {
+      const mainBtn = document.createElement("button");
+      mainBtn.type = "button";
+      mainBtn.className = `history-item-main ${session.id === currentChatId ? "active" : ""}`;
+      mainBtn.textContent = session.title || "New Chat";
+
+      mainBtn.addEventListener("click", function () {
         switchSession(session.id);
       });
 
-      historyList.appendChild(item);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "history-delete-btn";
+      deleteBtn.setAttribute("aria-label", `Delete ${session.title || "chat"}`);
+      deleteBtn.title = "Delete this chat";
+      deleteBtn.textContent = "🗑";
+
+      deleteBtn.addEventListener("click", function (event) {
+        event.stopPropagation();
+        deleteSession(session.id);
+      });
+
+      row.appendChild(mainBtn);
+      row.appendChild(deleteBtn);
+      historyList.appendChild(row);
     });
   }
 
@@ -248,6 +270,13 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function startNewChat() {
+    const current = getCurrentSession();
+    if (current && current.messages.length === 0) {
+      closeSidebar();
+      input.focus();
+      return;
+    }
+
     const newSession = createSession("New Chat");
     sessions.unshift(newSession);
     currentChatId = newSession.id;
@@ -262,18 +291,48 @@ document.addEventListener("DOMContentLoaded", function () {
     input.focus();
   }
 
+  function deleteSession(sessionId) {
+    const session = sessions.find((item) => item.id === sessionId);
+    if (!session) return;
+
+    const label = session.title || "this chat";
+    const confirmed = confirm(`Delete "${label}"?`);
+    if (!confirmed) return;
+
+    const deletingCurrent = sessionId === currentChatId;
+    sessions = sessions.filter((item) => item.id !== sessionId);
+
+    if (sessions.length === 0) {
+      const fresh = createSession("New Chat");
+      sessions = [fresh];
+      currentChatId = fresh.id;
+    } else {
+      sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+      if (deletingCurrent || !sessions.some((item) => item.id === currentChatId)) {
+        currentChatId = sessions[0].id;
+      }
+    }
+
+    saveCurrentChatId();
+    saveSessions();
+    renderCurrentSession();
+    renderHistory();
+    updateWelcomeState();
+    input.focus();
+  }
+
   function getCurrentSession() {
     return sessions.find((session) => session.id === currentChatId) || null;
   }
 
   function createSession(title) {
-    return {
+    return normalizeSession({
       id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       title,
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    };
+    });
   }
 
   function makeSessionTitle(message) {
@@ -293,16 +352,42 @@ document.addEventListener("DOMContentLoaded", function () {
       const firstUser = parsed.find((m) => m && m.role === "user" && typeof m.text === "string");
       const title = firstUser ? makeSessionTitle(firstUser.text) : "Imported Chat";
 
-      return {
+      return normalizeSession({
         id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         title,
         messages: parsed.filter((m) => m && typeof m.text === "string"),
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      };
+      });
     } catch {
       return null;
     }
+  }
+
+  function normalizeSession(session) {
+    const safeId = typeof session.id === "string" && session.id.trim() ? session.id : `chat_${Date.now()}`;
+    const safeTitle =
+      typeof session.title === "string" && session.title.trim()
+        ? session.title.trim()
+        : "New Chat";
+
+    const safeMessages = Array.isArray(session.messages)
+      ? session.messages
+          .filter((message) => message && typeof message.text === "string")
+          .map((message) => ({
+            role: message.role === "assistant" ? "assistant" : "user",
+            text: String(message.text),
+            ts: typeof message.ts === "number" ? message.ts : Date.now(),
+          }))
+      : [];
+
+    return {
+      id: safeId,
+      title: safeTitle,
+      messages: safeMessages,
+      createdAt: typeof session.createdAt === "number" ? session.createdAt : Date.now(),
+      updatedAt: typeof session.updatedAt === "number" ? session.updatedAt : Date.now(),
+    };
   }
 
   function loadSessions() {
@@ -311,7 +396,9 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
-      return parsed.filter((session) => session && session.id && Array.isArray(session.messages));
+      return parsed
+        .filter((session) => session && session.id && Array.isArray(session.messages))
+        .map((session) => normalizeSession(session));
     } catch {
       return [];
     }
@@ -319,6 +406,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function saveSessions() {
     try {
+      sessions.sort((a, b) => b.updatedAt - a.updatedAt);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
     } catch (e) {
       console.warn("Could not save chat sessions", e);
