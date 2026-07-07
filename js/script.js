@@ -1,5 +1,4 @@
-// js/script.js - PassSabi AI chat, streaming, sidebar, chat history, delete-one-history
-
+// js/script.js
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
   const sendBtn = document.getElementById("sendBtn");
@@ -115,11 +114,15 @@ document.addEventListener("DOMContentLoaded", function () {
     appendTypingIndicator();
     scrollToBottom();
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -159,9 +162,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const data = extractSseData(block);
           if (!data) continue;
 
-          if (data === "[DONE]") {
-            continue;
-          }
+          if (data === "[DONE]") continue;
 
           let parsed;
           try {
@@ -267,6 +268,7 @@ document.addEventListener("DOMContentLoaded", function () {
         appendMessage(errMsg);
       }
     } finally {
+      clearTimeout(timeoutId);
       input.disabled = false;
       if (sendBtn) sendBtn.disabled = false;
       input.focus();
