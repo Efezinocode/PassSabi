@@ -41,67 +41,43 @@ Style rules:
     `.trim();
 
     const providerOrder = buildProviderOrder(requestedProvider);
-    const errors = [];
 
-    let streamStarted = false;
-
-    const startStream = () => {
-      if (streamStarted) return;
-
-      res.status(200);
-      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-      res.setHeader("Cache-Control", "no-cache, no-transform");
-      res.setHeader("Connection", "keep-alive");
-      res.setHeader("X-Accel-Buffering", "no");
-
-      if (typeof res.flushHeaders === "function") {
-        res.flushHeaders();
-      }
-
-      streamStarted = true;
-    };
+    // Set streaming headers early for valid chat requests.
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    if (typeof res.flushHeaders === "function") {
+      res.flushHeaders();
+    }
 
     const sendEvent = (payload) => {
-      startStream();
       res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
 
     for (const provider of providerOrder) {
-      const providerState = { emittedAnyChunk: false };
-
       try {
         sendEvent({ status: "thinking", provider });
 
-        const reply = await runProvider(provider, message, systemInstruction, (chunk) => {
-          providerState.emittedAnyChunk = true;
-          sendEvent({ chunk, provider });
-        });
+        const reply = await runProvider(
+          provider,
+          message,
+          systemInstruction,
+          (chunk) => sendEvent({ chunk, provider })
+        );
 
-        sendEvent({ done: true, provider });
-        return res.end();
-      } catch (err) {
-        console.error(`${provider} failed:`, err);
-
-        if (providerState.emittedAnyChunk) {
-          sendEvent({
-            error: `Stream interrupted from ${provider}. ${err.message}`,
-            provider,
-          });
+        if (reply && reply.trim()) {
+          sendEvent({ done: true, provider });
           return res.end();
         }
-
-        errors.push(`${provider}: ${err.message}`);
-        sendEvent({
-          status: "error",
-          provider,
-          message: err.message,
-        });
+      } catch (err) {
+        console.error(`${provider} failed:`, err);
       }
     }
 
     sendEvent({
       error: "All providers failed. Please try again later.",
-      details: errors.join(" | "),
     });
     return res.end();
   } catch (error) {
@@ -253,6 +229,10 @@ async function callGemini(message, systemInstruction, onChunk) {
       body: JSON.stringify({
         contents: [{ parts: [{ text: message }] }],
         system_instruction: { parts: [{ text: systemInstruction }] },
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        },
       }),
     }
   );
@@ -286,7 +266,17 @@ async function consumeSseStream(response, extractText, onChunk) {
   let fullText = "";
 
   while (true) {
-    const { done, value } = await reader.read();
+    let result;
+    try {
+      result = await reader.read();
+    } catch (err) {
+      if (fullText.trim()) {
+        return fullText.trim();
+      }
+      throw err;
+    }
+
+    const { done, value } = result;
 
     if (value) {
       buffer += decoder.decode(value, { stream: true });
