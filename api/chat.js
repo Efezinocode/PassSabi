@@ -1,8 +1,5 @@
 // api/chat.js
-const {
-  buildProviderOrder,
-  runProvider,
-} = require("./providers");
+const { buildProviderOrder, runProvider } = require("./providers");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -93,9 +90,7 @@ Style rules:
       }
     }
 
-    sendEvent({
-      error: "All providers failed. Please try again later.",
-    });
+    sendEvent({ error: "All providers failed. Please try again later." });
     return res.end();
   } catch (error) {
     console.error("PassSabi Error:", error);
