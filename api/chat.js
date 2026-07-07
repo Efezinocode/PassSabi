@@ -44,6 +44,7 @@ Style rules:
     const errors = [];
 
     let streamStarted = false;
+
     const startStream = () => {
       if (streamStarted) return;
 
@@ -177,9 +178,8 @@ async function callGroq(message, systemInstruction, onChunk) {
       }),
     });
 
-    const raw = await response.text();
-
     if (!response.ok) {
+      const raw = await response.text();
       lastError = new Error(`Groq Error (${model}): ${response.status} ${raw}`);
       continue;
     }
@@ -195,7 +195,6 @@ async function callGroq(message, systemInstruction, onChunk) {
 
       lastError = new Error(`Groq Error (${model}): no response text found`);
     } catch (err) {
-      if (err.streamed) throw err;
       lastError = err;
     }
   }
@@ -225,25 +224,19 @@ async function callGrok(message, systemInstruction, onChunk) {
     }),
   });
 
-  const raw = await response.text();
-
   if (!response.ok) {
+    const raw = await response.text();
     throw new Error(`Grok Error: ${response.status} ${raw}`);
   }
 
-  try {
-    const full = await consumeSseStream(
-      response,
-      (json) => json.choices?.[0]?.delta?.content || "",
-      onChunk
-    );
+  const full = await consumeSseStream(
+    response,
+    (json) => json.choices?.[0]?.delta?.content || "",
+    onChunk
+  );
 
-    if (!full) throw new Error("Grok Error: no response text found");
-    return full;
-  } catch (err) {
-    if (err.streamed) throw err;
-    throw err;
-  }
+  if (!full) throw new Error("Grok Error: no response text found");
+  return full;
 }
 
 async function callGemini(message, systemInstruction, onChunk) {
@@ -264,28 +257,22 @@ async function callGemini(message, systemInstruction, onChunk) {
     }
   );
 
-  const raw = await response.text();
-
   if (!response.ok) {
+    const raw = await response.text();
     throw new Error(`Gemini Error: ${response.status} ${raw}`);
   }
 
-  try {
-    const full = await consumeSseStream(
-      response,
-      (json) =>
-        json.candidates?.[0]?.content?.parts
-          ?.map((part) => part?.text || "")
-          .join("") || "",
-      onChunk
-    );
+  const full = await consumeSseStream(
+    response,
+    (json) =>
+      json.candidates?.[0]?.content?.parts
+        ?.map((part) => part?.text || "")
+        .join("") || "",
+    onChunk
+  );
 
-    if (!full) throw new Error("Gemini Error: no response text found");
-    return full;
-  } catch (err) {
-    if (err.streamed) throw err;
-    throw err;
-  }
+  if (!full) throw new Error("Gemini Error: no response text found");
+  return full;
 }
 
 async function consumeSseStream(response, extractText, onChunk) {
@@ -297,7 +284,6 @@ async function consumeSseStream(response, extractText, onChunk) {
   const decoder = new TextDecoder();
   let buffer = "";
   let fullText = "";
-  let streamedAny = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -332,7 +318,6 @@ async function consumeSseStream(response, extractText, onChunk) {
 
       if (delta) {
         fullText += delta;
-        streamedAny = true;
         onChunk(delta);
       }
     }
@@ -345,24 +330,18 @@ async function consumeSseStream(response, extractText, onChunk) {
   if (buffer.trim()) {
     const data = extractSseData(buffer);
     if (data && data !== "[DONE]") {
-      let parsed;
       try {
-        parsed = JSON.parse(data);
+        const parsed = JSON.parse(data);
         const incoming = extractText(parsed) || "";
         const delta = computeDelta(fullText, incoming);
         if (delta) {
           fullText += delta;
-          streamedAny = true;
           onChunk(delta);
         }
       } catch {
         // ignore leftover parse noise
       }
     }
-  }
-
-  if (!streamedAny && !fullText.trim()) {
-    return "";
   }
 
   return fullText.trim();
