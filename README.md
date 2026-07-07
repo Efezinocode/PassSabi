@@ -4,7 +4,7 @@ PassSabi AI — An AI-powered learning assistant that helps students prepare for
 
 Live demo: https://passsabi.vercel.app
 
-Author: Efezino Great (aka Efezino Uzezi) — Founder of PassSabi AI
+Author: Uzezi Great Efezino(aka Efezino Uzezi) — Founder of PassSabi AI
 
 Overview
 - Teach students step-by-step explanations, not just answers.
