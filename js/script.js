@@ -103,7 +103,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     session.updatedAt = Date.now();
     saveSessions();
-    appendMessage(userMsg);
+    // removed appendMessage(assistantMsg);
     renderHistory();
     updateWelcomeState();
 
@@ -230,18 +230,7 @@ document.addEventListener("DOMContentLoaded", function () {
         throw new Error("No response text found.");
       }
 
-      const assistantMsg = {
-        role: "assistant",
-        text: finalText,
-        ts: Date.now(),
-      };
-
-      session.messages.push(assistantMsg);
-      session.updatedAt = Date.now();
-      saveSessions();
-      appendMessage(assistantMsg);
-      renderHistory();
-      updateWelcomeState();
+      
     } catch (err) {
       console.error("Chat error:", err);
       removeTypingPlaceholders();
