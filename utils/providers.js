@@ -176,7 +176,7 @@ async function consumeSseStream(response, extractText, onChunk) {
 
       try {
         const parsed = JSON.parse(data);
-        const text = extractText(parsed);
+        const text = extractText(parsed) || "";
         if (text) {
           const delta = computeDelta(fullText, text);
           if (delta) {
@@ -199,7 +199,7 @@ async function consumeSseStream(response, extractText, onChunk) {
     if (data && data !== "[DONE]") {
       try {
         const parsed = JSON.parse(data);
-        const text = extractText(parsed);
+        const text = extractText(parsed) || "";
         if (text) {
           const delta = computeDelta(fullText, text);
           if (delta) {
