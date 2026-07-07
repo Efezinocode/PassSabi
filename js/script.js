@@ -123,8 +123,11 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
       if (!response.ok) {
-        const raw = await response.text();
-        throw new Error(raw || `HTTP ${response.status}`);
+        let errorText = "";
+        try {
+          errorText = await response.text();
+        } catch {}
+        throw new Error(errorText || `HTTP ${response.status}`);
       }
 
       if (!response.body) {
@@ -611,12 +614,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function cleanReply(text) {
-    return String(text || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/^#{1,6}\s+/gm, "")
-      .replace(/\*\*(.*?)\*\*/g, "$1")
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/^\s*[*-]\s+/gm, "• ")
-      .trim();
+    return String(text || "").trim();
   }
 });
