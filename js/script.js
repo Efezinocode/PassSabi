@@ -1,4 +1,4 @@
-// script.js - PassSabi AI chat, non-streaming, sidebar, chat history, delete-one-history
+// script.js - PassSabi AI chat, streaming, sidebar, chat history, delete-one-history
 
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
@@ -124,22 +124,112 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const raw = await response.text();
 
-      let data = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        data = {};
+      if (!response.ok) {
+        throw new Error(raw || `HTTP ${response.status}`);
       }
 
-      if (!response.ok) {
-        throw new Error(data.error || data.details || raw || `HTTP ${response.status}`);
+      if (!response.body) {
+        throw new Error("Missing streaming response.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      let buffer = "";
+      let fullReply = "";
+      let assistantBubble = null;
+      let firstChunkSeen = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+        }
+
+        while (true) {
+          const boundary = buffer.indexOf("\n\n");
+          if (boundary === -1) break;
+
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+
+          const data = extractSseData(block);
+          if (!data) continue;
+
+          if (data === "[DONE]") {
+            continue;
+          }
+
+          let parsed;
+          try {
+            parsed = JSON.parse(data);
+          } catch (e) {
+            console.warn("Streaming parse error:", e);
+            continue;
+          }
+
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+
+          if (parsed.chunk) {
+            if (!firstChunkSeen) {
+              firstChunkSeen = true;
+              removeTypingPlaceholders();
+              assistantBubble = createAssistantBubble();
+            }
+
+            fullReply += parsed.chunk;
+            updateAssistantBubble(assistantBubble, fullReply);
+            scrollToBottom();
+          }
+
+          if (parsed.done && parsed.provider) {
+            console.log(`Answered by: ${parsed.provider}`);
+          }
+        }
+
+        if (done) break;
+      }
+
+      buffer += decoder.decode();
+
+      if (buffer.trim()) {
+        const data = extractSseData(buffer);
+        if (data && data !== "[DONE]") {
+          try {
+            const parsed = JSON.parse(data);
+
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            }
+
+            if (parsed.chunk) {
+              if (!firstChunkSeen) {
+                firstChunkSeen = true;
+                removeTypingPlaceholders();
+                assistantBubble = createAssistantBubble();
+              }
+              fullReply += parsed.chunk;
+              updateAssistantBubble(assistantBubble, fullReply);
+            }
+          } catch (e) {
+            console.warn("Streaming parse error:", e);
+          }
+        }
       }
 
       removeTypingPlaceholders();
 
+      const finalText = cleanReply(fullReply || "No response.");
+      if (!finalText) {
+        throw new Error("No response text found.");
+      }
+
       const assistantMsg = {
         role: "assistant",
-        text: cleanReply(data.reply || "No response."),
+        text: finalText,
         ts: Date.now(),
       };
 
@@ -153,13 +243,23 @@ document.addEventListener("DOMContentLoaded", function () {
       console.error("Chat error:", err);
       removeTypingPlaceholders();
 
+      const streamWasVisible = chatBox.querySelector(".chat-row.assistant .chat-bubble:not(.typing)");
+
       const errMsg = {
         role: "assistant",
         text: err.message || "Sorry, something went wrong. Please try again.",
         ts: Date.now(),
       };
 
-      appendMessage(errMsg);
+      if (!streamWasVisible) {
+        appendMessage(errMsg);
+      } else {
+        appendMessage({
+          role: "assistant",
+          text: "The reply was interrupted. Please try again.",
+          ts: Date.now(),
+        });
+      }
     } finally {
       input.disabled = false;
       if (sendBtn) sendBtn.disabled = false;
@@ -185,6 +285,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
     row.appendChild(bubble);
     chatBox.appendChild(row);
+  }
+
+  function createAssistantBubble() {
+    const row = document.createElement("div");
+    row.className = "chat-row assistant";
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+
+    row.appendChild(bubble);
+    chatBox.appendChild(row);
+
+    return bubble;
+  }
+
+  function updateAssistantBubble(bubble, text) {
+    if (!bubble) return;
+    bubble.textContent = cleanReply(text);
   }
 
   function appendTypingIndicator() {
@@ -365,7 +483,10 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function normalizeSession(session) {
-    const safeId = typeof session.id === "string" && session.id.trim() ? session.id : `chat_${Date.now()}`;
+    const safeId =
+      typeof session.id === "string" && session.id.trim()
+        ? session.id
+        : `chat_${Date.now()}`;
     const safeTitle =
       typeof session.title === "string" && session.title.trim()
         ? session.title.trim()
@@ -470,6 +591,20 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
       openSidebar();
     }
+  }
+
+  function extractSseData(block) {
+    const lines = block.split(/\r?\n/);
+    const dataLines = [];
+
+    for (const line of lines) {
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).replace(/^\s+/, ""));
+      }
+    }
+
+    if (dataLines.length === 0) return null;
+    return dataLines.join("\n");
   }
 
   function cleanReply(text) {
