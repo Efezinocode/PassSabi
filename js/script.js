@@ -43,7 +43,9 @@ document.addEventListener("DOMContentLoaded", function () {
     currentChatId = sessions[0].id;
     saveSessions();
     saveCurrentChatId();
-  } else if (!currentChatId || !sessions.some((session) => session.id === currentChatId)) {
+  } else if (!currentChatId || !sessions.some(function (session) {
+    return session.id === currentChatId;
+  })) {
     currentChatId = sessions[0].id;
     saveCurrentChatId();
   }
@@ -84,7 +86,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function sendMessage() {
     const message = input.value.trim();
-    if (message === "") return;
+    if (!message) return;
 
     const session = getCurrentSession();
     if (!session) return;
@@ -103,6 +105,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     session.updatedAt = Date.now();
     saveSessions();
+
     appendMessage(userMsg);
     renderHistory();
     updateWelcomeState();
@@ -115,7 +118,13 @@ document.addEventListener("DOMContentLoaded", function () {
     scrollToBottom();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    const timeoutId = setTimeout(function () {
+      controller.abort();
+    }, 90000);
+
+    let fullReply = "";
+    let assistantBubble = null;
+    let firstChunkSeen = false;
 
     try {
       const response = await fetch("/api/chat", {
@@ -129,7 +138,9 @@ document.addEventListener("DOMContentLoaded", function () {
         let errorText = "";
         try {
           errorText = await response.text();
-        } catch {}
+        } catch {
+          errorText = "";
+        }
         throw new Error(errorText || `HTTP ${response.status}`);
       }
 
@@ -139,14 +150,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-
       let buffer = "";
-      let fullReply = "";
-      let assistantBubble = null;
-      let firstChunkSeen = false;
 
       while (true) {
-        const { done, value } = await reader.read();
+        const result = await reader.read();
+        const done = result.done;
+        const value = result.value;
 
         if (value) {
           buffer += decoder.decode(value, { stream: true });
@@ -161,7 +170,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
           const data = extractSseData(block);
           if (!data) continue;
-
           if (data === "[DONE]") continue;
 
           let parsed;
@@ -189,7 +197,7 @@ document.addEventListener("DOMContentLoaded", function () {
           }
 
           if (parsed.done && parsed.provider) {
-            console.log(`Answered by: ${parsed.provider}`);
+            console.log("Answered by: " + parsed.provider);
           }
         }
 
@@ -218,7 +226,7 @@ document.addEventListener("DOMContentLoaded", function () {
               updateAssistantBubble(assistantBubble, fullReply);
             }
           } catch (e) {
-            console.warn("Streaming parse error:", e);
+            console.warn("Final buffer parse error:", e);
           }
         }
       }
@@ -229,20 +237,24 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!finalText) {
         throw new Error("No response text found.");
       }
+
       const assistantMsg = {
-       role: "assistant",
-       text: finalText,
-       ts: Date.now(),
-};
+        role: "assistant",
+        text: finalText,
+        ts: Date.now(),
+      };
 
       session.messages.push(assistantMsg);
       session.updatedAt = Date.now();
       saveSessions();
-      appendMessage(assistantMsg);
+
+      if (!assistantBubble) {
+        assistantBubble = createAssistantBubble();
+      }
+      updateAssistantBubble(assistantBubble, finalText);
+
       renderHistory();
       updateWelcomeState();
-
-      
     } catch (err) {
       console.error("Chat error:", err);
       removeTypingPlaceholders();
@@ -257,7 +269,12 @@ document.addEventListener("DOMContentLoaded", function () {
         session.messages.push(assistantMsg);
         session.updatedAt = Date.now();
         saveSessions();
-        appendMessage(assistantMsg);
+
+        if (!assistantBubble) {
+          assistantBubble = createAssistantBubble();
+        }
+        updateAssistantBubble(assistantBubble, partial);
+
         renderHistory();
         updateWelcomeState();
       } else {
@@ -279,7 +296,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function appendMessage(msg) {
     const row = document.createElement("div");
-    row.className = `chat-row ${msg.role}`;
+    row.className = "chat-row " + msg.role;
 
     const bubble = document.createElement("div");
     bubble.className = "chat-bubble";
@@ -321,7 +338,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function removeTypingPlaceholders() {
     chatBox
       .querySelectorAll(".chat-row.assistant .chat-bubble.typing")
-      .forEach((ph) => {
+      .forEach(function (ph) {
         const row = ph.closest(".chat-row");
         if (row) row.remove();
       });
@@ -336,7 +353,9 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    session.messages.forEach((msg) => appendMessage(msg));
+    session.messages.forEach(function (msg) {
+      appendMessage(msg);
+    });
     scrollToBottom();
   }
 
@@ -345,7 +364,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     historyList.innerHTML = "";
 
-    const ordered = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    const ordered = sessions.slice().sort(function (a, b) {
+      return b.updatedAt - a.updatedAt;
+    });
 
     if (ordered.length === 0) {
       const empty = document.createElement("p");
@@ -355,13 +376,14 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    ordered.forEach((session) => {
+    ordered.forEach(function (session) {
       const row = document.createElement("div");
       row.className = "history-item-row";
 
       const mainBtn = document.createElement("button");
       mainBtn.type = "button";
-      mainBtn.className = `history-item-main ${session.id === currentChatId ? "active" : ""}`;
+      mainBtn.className =
+        "history-item-main " + (session.id === currentChatId ? "active" : "");
       mainBtn.textContent = session.title || "New Chat";
 
       mainBtn.addEventListener("click", function () {
@@ -371,7 +393,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.className = "history-delete-btn";
-      deleteBtn.setAttribute("aria-label", `Delete ${session.title || "chat"}`);
+      deleteBtn.setAttribute("aria-label", "Delete " + (session.title || "chat"));
       deleteBtn.title = "Delete this chat";
       deleteBtn.textContent = "🗑";
 
@@ -419,23 +441,28 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function deleteSession(sessionId) {
-    const session = sessions.find((item) => item.id === sessionId);
+    const session = sessions.find(function (item) {
+      return item.id === sessionId;
+    });
     if (!session) return;
 
     const label = session.title || "this chat";
-    const confirmed = confirm(`Delete "${label}"?`);
-    if (!confirmed) return;
+    if (!confirm('Delete "' + label + '"?')) return;
 
     const deletingCurrent = sessionId === currentChatId;
-    sessions = sessions.filter((item) => item.id !== sessionId);
+    sessions = sessions.filter(function (item) {
+      return item.id !== sessionId;
+    });
 
     if (sessions.length === 0) {
       const fresh = createSession("New Chat");
       sessions = [fresh];
       currentChatId = fresh.id;
     } else {
-      sessions.sort((a, b) => b.updatedAt - a.updatedAt);
-      if (deletingCurrent || !sessions.some((item) => item.id === currentChatId)) {
+      sessions.sort(function (a, b) {
+        return b.updatedAt - a.updatedAt;
+      });
+      if (deletingCurrent || !sessions.some(function (item) { return item.id === currentChatId; })) {
         currentChatId = sessions[0].id;
       }
     }
@@ -449,13 +476,15 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getCurrentSession() {
-    return sessions.find((session) => session.id === currentChatId) || null;
+    return sessions.find(function (session) {
+      return session.id === currentChatId;
+    }) || null;
   }
 
   function createSession(title) {
     return normalizeSession({
       id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      title,
+      title: title,
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -476,13 +505,17 @@ document.addEventListener("DOMContentLoaded", function () {
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed) || parsed.length === 0) return null;
 
-      const firstUser = parsed.find((m) => m && m.role === "user" && typeof m.text === "string");
+      const firstUser = parsed.find(function (m) {
+        return m && m.role === "user" && typeof m.text === "string";
+      });
       const title = firstUser ? makeSessionTitle(firstUser.text) : "Imported Chat";
 
       return normalizeSession({
         id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        title,
-        messages: parsed.filter((m) => m && typeof m.text === "string"),
+        title: title,
+        messages: parsed.filter(function (m) {
+          return m && typeof m.text === "string";
+        }),
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
@@ -503,12 +536,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const safeMessages = Array.isArray(session.messages)
       ? session.messages
-          .filter((message) => message && typeof message.text === "string")
-          .map((message) => ({
-            role: message.role === "assistant" ? "assistant" : "user",
-            text: String(message.text),
-            ts: typeof message.ts === "number" ? message.ts : Date.now(),
-          }))
+          .filter(function (message) {
+            return message && typeof message.text === "string";
+          })
+          .map(function (message) {
+            return {
+              role: message.role === "assistant" ? "assistant" : "user",
+              text: String(message.text),
+              ts: typeof message.ts === "number" ? message.ts : Date.now(),
+            };
+          })
       : [];
 
     return {
@@ -527,8 +564,12 @@ document.addEventListener("DOMContentLoaded", function () {
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
       return parsed
-        .filter((session) => session && session.id && Array.isArray(session.messages))
-        .map((session) => normalizeSession(session));
+        .filter(function (session) {
+          return session && session.id && Array.isArray(session.messages);
+        })
+        .map(function (session) {
+          return normalizeSession(session);
+        });
     } catch {
       return [];
     }
@@ -536,7 +577,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function saveSessions() {
     try {
-      sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+      sessions.sort(function (a, b) {
+        return b.updatedAt - a.updatedAt;
+      });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
     } catch (e) {
       console.warn("Could not save chat sessions", e);
@@ -566,7 +609,6 @@ document.addEventListener("DOMContentLoaded", function () {
     if (welcomeScreen) {
       welcomeScreen.hidden = hasMessages;
     }
-
     document.body.classList.toggle("has-messages", hasMessages);
   }
 
@@ -604,16 +646,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function extractSseData(block) {
     const lines = block.split(/\r?\n/);
-    const dataLines = [];
+    const dataLines = lines
+      .filter(function (line) {
+        return line.startsWith("data:");
+      })
+      .map(function (line) {
+        return line.slice(5).replace(/^\s+/, "");
+      });
 
-    for (const line of lines) {
-      if (line.startsWith("data:")) {
-        dataLines.push(line.slice(5).replace(/^\s+/, ""));
-      }
-    }
-
-    if (dataLines.length === 0) return null;
-    return dataLines.join("\n");
+    return dataLines.length ? dataLines.join("\n") : null;
   }
 
   function cleanReply(text) {
