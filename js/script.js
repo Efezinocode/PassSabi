@@ -1,4 +1,4 @@
-// script.js - PassSabi AI chat, streaming, sidebar, chat history, delete-one-history
+// js/script.js - PassSabi AI chat, streaming, sidebar, chat history, delete-one-history
 
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
@@ -122,9 +122,8 @@ document.addEventListener("DOMContentLoaded", function () {
         body: JSON.stringify({ message }),
       });
 
-      const raw = await response.text();
-
       if (!response.ok) {
+        const raw = await response.text();
         throw new Error(raw || `HTTP ${response.status}`);
       }
 
@@ -243,22 +242,26 @@ document.addEventListener("DOMContentLoaded", function () {
       console.error("Chat error:", err);
       removeTypingPlaceholders();
 
-      const streamWasVisible = chatBox.querySelector(".chat-row.assistant .chat-bubble:not(.typing)");
-
-      const errMsg = {
-        role: "assistant",
-        text: err.message || "Sorry, something went wrong. Please try again.",
-        ts: Date.now(),
-      };
-
-      if (!streamWasVisible) {
-        appendMessage(errMsg);
-      } else {
-        appendMessage({
+      const partial = cleanReply(fullReply || "");
+      if (partial) {
+        const assistantMsg = {
           role: "assistant",
-          text: "The reply was interrupted. Please try again.",
+          text: partial,
           ts: Date.now(),
-        });
+        };
+        session.messages.push(assistantMsg);
+        session.updatedAt = Date.now();
+        saveSessions();
+        appendMessage(assistantMsg);
+        renderHistory();
+        updateWelcomeState();
+      } else {
+        const errMsg = {
+          role: "assistant",
+          text: err.message || "Sorry, something went wrong. Please try again.",
+          ts: Date.now(),
+        };
+        appendMessage(errMsg);
       }
     } finally {
       input.disabled = false;
