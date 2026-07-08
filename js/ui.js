@@ -2,6 +2,7 @@
 let messageActionHandlers = {
   onRegenerate: null,
   onPin: null,
+  onShare: null,
 };
 
 export function setMessageActionHandlers(handlers = {}) {
@@ -246,7 +247,7 @@ function showCopiedState(button) {
 function createAssistantMessageShell(
   chatBox,
   rawText = "",
-  { showRegenerate = false, showPin = false, pinned = false } = {}
+  { showRegenerate = false, showPin = false, pinned = false, showShare = false } = {}
 ) {
   const row = document.createElement("div");
   row.className = "chat-row assistant";
@@ -315,8 +316,72 @@ function createAssistantMessageShell(
     actions.appendChild(pinBtn);
   }
 
+  let shareMenu = null;
+
+  if (showShare) {
+    const shareBtn = document.createElement("button");
+    shareBtn.type = "button";
+    shareBtn.className = "message-action-btn";
+    shareBtn.innerHTML = '<span class="action-icon">↗</span><span>Share</span>';
+    shareBtn.title = "Share / Export";
+    shareBtn.setAttribute("aria-label", "Share or export chat");
+
+    shareMenu = document.createElement("div");
+    shareMenu.className = "share-menu";
+
+    const createShareItem = (label, action, icon) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "share-menu-item";
+      item.innerHTML = `<span class="action-icon">${icon}</span><span>${label}</span>`;
+
+      item.addEventListener("click", () => {
+        if (typeof messageActionHandlers.onShare === "function") {
+          messageActionHandlers.onShare(action);
+        }
+        shareMenu.classList.remove("open");
+        shareBtn.classList.remove("active");
+      });
+
+      return item;
+    };
+
+    shareMenu.appendChild(createShareItem("Copy Chat", "copy", "⧉"));
+    shareMenu.appendChild(createShareItem("Download .txt", "txt", "↓"));
+    shareMenu.appendChild(createShareItem("Download .md", "md", "↓"));
+
+    shareBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const isOpen = shareMenu.classList.contains("open");
+
+      if (isOpen) {
+        shareMenu.classList.remove("open");
+        shareBtn.classList.remove("active");
+        return;
+      }
+
+      chatBox.querySelectorAll(".share-menu.open").forEach((menu) => {
+        menu.classList.remove("open");
+      });
+
+      chatBox.querySelectorAll(".message-action-btn.active").forEach((btn) => {
+        btn.classList.remove("active");
+      });
+
+      shareMenu.classList.add("open");
+      shareBtn.classList.add("active");
+    });
+
+    actions.appendChild(shareBtn);
+  }
+
   wrap.appendChild(bubble);
   wrap.appendChild(actions);
+
+  if (shareMenu) {
+    wrap.appendChild(shareMenu);
+  }
+
   row.appendChild(wrap);
   chatBox.appendChild(row);
 
@@ -347,6 +412,7 @@ export function appendMessage(chatBox, msg, options = {}) {
       showRegenerate: Boolean(options.showRegenerate),
       showPin: Boolean(options.showPin),
       pinned: Boolean(options.pinned),
+      showShare: Boolean(options.showShare),
     });
 
     bubble.innerHTML = renderMarkdown(msg.text);
@@ -415,6 +481,7 @@ export function renderCurrentSession(chatBox, session) {
       showRegenerate: isLastAssistant,
       showPin: isLastAssistant,
       pinned: Boolean(session.pinned),
+      showShare: isLastAssistant,
     });
   });
 }
@@ -505,4 +572,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-      }
+                        }
