@@ -1,4 +1,4 @@
-let messageActionHandlers = {
+mpinBtnopinBtBtntateeActionHandlerspinBtnopipinBtBtntateeActionHandlers = {
   onShare: null,
   onLessonTool: null,
   onRetry: null,
@@ -374,7 +374,7 @@ async function copyTextToClipboard(text) {
   return success;
 }
 
-function showCopiedState(button) {
+function showCopipinBtBtntate(button) {
   if (!button) return;
 
   const originalHtml = button.innerHTML;
@@ -718,4 +718,60 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
     pinBtn.className = "history-mini-btn";
     pinBtn.title = session.pinned ? "Unpin chat" : "Pin chat";
     pinBtn.setAttribute("aria-label", session.pinned ? "Unpin chat" : "Pin chat");
-    pinBtn
+    pinBtn.textContent = session.pinned ? "📌" : "📍";
+
+    pinBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (typeof handlers.onPin === "function") {
+        handlers.onPin(session.id);
+      }
+    });
+
+    const renameBtn = document.createElement("button");
+    renameBtn.type = "button";
+    renameBtn.className = "history-mini-btn";
+    renameBtn.title = "Rename chat";
+    renameBtn.setAttribute("aria-label", "Rename chat");
+    renameBtn.textContent = "✎";
+
+    renameBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (typeof handlers.onRename === "function") {
+        handlers.onRename(session.id);
+      }
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "history-mini-btn danger";
+    deleteBtn.title = "Delete chat";
+    deleteBtn.setAttribute("aria-label", "Delete chat");
+    deleteBtn.textContent = "🗑";
+
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (typeof handlers.onDelete === "function") {
+        handlers.onDelete(session.id);
+      }
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "history-actions";
+    actions.appendChild(pinBtn);
+    actions.appendChild(renameBtn);
+    actions.appendChild(deleteBtn);
+
+    row.appendChild(mainBtn);
+    row.appendChild(actions);
+    historyList.appendChild(row);
+  });
+}
+
+export function updateWelcomeState(welcomeScreen, session) {
+  if (!welcomeScreen) return;
+
+  const hasMessages =
+    session && Array.isArray(session.messages) && session.messages.length > 0;
+
+  welcomeScreen.hidden = !!hasMessages;
+}
