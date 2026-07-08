@@ -553,4 +553,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-        }
+}
