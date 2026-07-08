@@ -71,8 +71,6 @@ function renderInlineMarkdown(text) {
   out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
   out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/\*(.+?)\*/g, "<em>$1</em>");
-  out = out.replace(/^\s*-\s+(.*)$/gm, "<li>$1</li>");
-  out = out.replace(/^\s*\d+\.\s+(.*)$/gm, "<li>$1</li>");
   out = linkify(out);
 
   return out;
@@ -115,7 +113,7 @@ function renderMarkdown(text) {
     }
   }
 
-  for (let line of lines) {
+  for (const line of lines) {
     const trimmed = line.trim();
 
     if (!trimmed) {
@@ -130,7 +128,9 @@ function renderMarkdown(text) {
 
       const level = Math.min(trimmed.match(/^#{1,6}/)[0].length, 6);
       const content = trimmed.replace(/^#{1,6}\s+/, "");
-      html.push(`<h${level} class="md-h">${renderInlineMarkdown(content)}</h${level}>`);
+      html.push(
+        `<h${level} class="md-h">${renderInlineMarkdown(content)}</h${level}>`
+      );
       continue;
     }
 
@@ -138,10 +138,12 @@ function renderMarkdown(text) {
       closePara();
       if (!inUl) {
         closeLists();
-        html.push("<ul class=\"md-list\">");
+        html.push('<ul class="md-list">');
         inUl = true;
       }
-      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`);
+      html.push(
+        `<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`
+      );
       continue;
     }
 
@@ -149,16 +151,18 @@ function renderMarkdown(text) {
       closePara();
       if (!inOl) {
         closeLists();
-        html.push("<ol class=\"md-list\">");
+        html.push('<ol class="md-list">');
         inOl = true;
       }
-      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`);
+      html.push(
+        `<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`
+      );
       continue;
     }
 
     closeLists();
     if (!inPara) {
-      html.push("<p class=\"md-p\">");
+      html.push('<p class="md-p">');
       inPara = true;
     } else {
       html.push("<br>");
@@ -178,25 +182,121 @@ function renderMarkdown(text) {
   return out;
 }
 
+async function copyTextToClipboard(text) {
+  const value = String(text || "").trim();
+  if (!value) return false;
+
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
+    return true;
+  }
+
+  const temp = document.createElement("textarea");
+  temp.value = value;
+  temp.setAttribute("readonly", "");
+  temp.style.position = "fixed";
+  temp.style.opacity = "0";
+  temp.style.left = "-9999px";
+  document.body.appendChild(temp);
+  temp.select();
+
+  let success = false;
+  try {
+    success = document.execCommand("copy");
+  } catch {
+    success = false;
+  }
+
+  document.body.removeChild(temp);
+  return success;
+}
+
+function showCopiedState(button) {
+  if (!button) return;
+
+  const originalHtml = button.innerHTML;
+  const originalTitle = button.title;
+  const originalLabel = button.getAttribute("aria-label");
+
+  button.classList.add("copied");
+  button.innerHTML = '<span class="action-icon">✓</span><span>Copied</span>';
+  button.title = "Copied";
+  button.setAttribute("aria-label", "Copied");
+
+  window.setTimeout(() => {
+    button.classList.remove("copied");
+    button.innerHTML = originalHtml;
+    if (originalTitle) button.title = originalTitle;
+    if (originalLabel) button.setAttribute("aria-label", originalLabel);
+  }, 1200);
+}
+
+function createAssistantMessageShell(chatBox, rawText = "") {
+  const row = document.createElement("div");
+  row.className = "chat-row assistant";
+
+  const wrap = document.createElement("div");
+  wrap.className = "assistant-message";
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble md-content";
+  bubble.dataset.rawText = cleanReply(rawText);
+
+  const actions = document.createElement("div");
+  actions.className = "message-actions";
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "message-action-btn";
+  copyBtn.innerHTML = '<span class="action-icon">⧉</span><span>Copy</span>';
+  copyBtn.title = "Copy message";
+  copyBtn.setAttribute("aria-label", "Copy message");
+
+  copyBtn.addEventListener("click", async () => {
+    const textToCopy = bubble.dataset.rawText || cleanReply(bubble.textContent);
+    try {
+      const copied = await copyTextToClipboard(textToCopy);
+      if (copied) showCopiedState(copyBtn);
+    } catch {
+      // silent fail
+    }
+  });
+
+  actions.appendChild(copyBtn);
+  wrap.appendChild(bubble);
+  wrap.appendChild(actions);
+  row.appendChild(wrap);
+  chatBox.appendChild(row);
+
+  return bubble;
+}
+
 export function appendMessage(chatBox, msg) {
   if (!chatBox || !msg) return null;
 
+  const role = msg.role === "assistant" ? "assistant" : "user";
+
+  if (role === "assistant") {
+    const bubble = createAssistantMessageShell(chatBox, msg.text);
+
+    if (msg.typing) {
+      bubble.classList.add("typing");
+      bubble.innerHTML =
+        '<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
+      return bubble;
+    }
+
+    bubble.innerHTML = renderMarkdown(msg.text);
+    bubble.dataset.rawText = cleanReply(msg.text);
+    return bubble;
+  }
+
   const row = document.createElement("div");
-  row.className = `chat-row ${msg.role === "assistant" ? "assistant" : "user"}`;
+  row.className = "chat-row user";
 
   const bubble = document.createElement("div");
   bubble.className = "chat-bubble";
-
-  if (msg.typing) {
-    bubble.classList.add("typing");
-    bubble.innerHTML =
-      '<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
-  } else if (msg.role === "assistant") {
-    bubble.classList.add("md-content");
-    bubble.innerHTML = renderMarkdown(msg.text);
-  } else {
-    bubble.textContent = cleanReply(msg.text);
-  }
+  bubble.textContent = cleanReply(msg.text);
 
   row.appendChild(bubble);
   chatBox.appendChild(row);
@@ -206,23 +306,14 @@ export function appendMessage(chatBox, msg) {
 
 export function createAssistantBubble(chatBox) {
   if (!chatBox) return null;
-
-  const row = document.createElement("div");
-  row.className = "chat-row assistant";
-
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble md-content";
-
-  row.appendChild(bubble);
-  chatBox.appendChild(row);
-
-  return bubble;
+  return createAssistantMessageShell(chatBox, "");
 }
 
 export function updateAssistantBubble(bubble, text) {
   if (!bubble) return;
   bubble.classList.add("md-content");
   bubble.innerHTML = renderMarkdown(text);
+  bubble.dataset.rawText = cleanReply(text);
 }
 
 export function appendTypingIndicator(chatBox) {
@@ -327,4 +418,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-          }
+    }
