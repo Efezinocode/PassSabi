@@ -27,6 +27,7 @@ import {
   removeTypingPlaceholders,
   scrollToBottom,
   setSendButtonState,
+  setMessageActionHandlers,
   updateAssistantBubble,
   updateWelcomeState,
 } from "./ui.js";
@@ -44,8 +45,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const sidebar = document.getElementById("sidebar");
   const backdrop = document.getElementById("backdrop");
   const newChatBtn = document.getElementById("newChatBtn");
+  const chatSearch = document.getElementById("chatSearch");
   const historyList = document.getElementById("chat-history");
   const welcomeScreen = document.getElementById("welcome-screen");
+
+  const DEFAULT_PLACEHOLDER = "Type your question here...";
 
   if (btn) {
     btn.addEventListener("click", function () {
@@ -57,6 +61,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   let sessions = loadSessions();
   let currentChatId = loadCurrentChatId();
+  let searchQuery = "";
 
   if (sessions.length === 0) {
     const migrated = migrateLegacyMessages();
@@ -100,16 +105,55 @@ document.addEventListener("DOMContentLoaded", function () {
     scrollToBottom(chatBox, false);
   }
 
+  function clearTransientStatus() {
+    chatBox
+      .querySelectorAll(".transient-status")
+      .forEach((node) => node.remove());
+  }
+
   function refreshHistory() {
-    renderHistory(historyList, sessions, currentChatId, {
+    const query = searchQuery.trim().toLowerCase();
+
+    const visibleSessions = !query
+      ? sessions
+      : sessions.filter(function (session) {
+          const title = String(session.title || "").toLowerCase();
+          const messagesText = Array.isArray(session.messages)
+            ? session.messages
+                .map(function (msg) {
+                  return String(msg.text || "");
+                })
+                .join(" ")
+                .toLowerCase()
+            : "";
+
+          return title.includes(query) || messagesText.includes(query);
+        });
+
+    if (historyList) {
+      historyList.innerHTML = "";
+    }
+
+    if (visibleSessions.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "history-empty";
+      empty.textContent = query ? "No chats found." : "No chats yet.";
+      historyList.appendChild(empty);
+      return;
+    }
+
+    renderHistory(historyList, visibleSessions, currentChatId, {
       onSwitch: switchSession,
       onDelete: deleteSession,
+      onPin: toggleCurrentChatPin,
+      onRename: renameSession,
     });
   }
 
   function setGeneratingState(nextState) {
     isGenerating = nextState;
     input.disabled = nextState;
+    input.placeholder = nextState ? "PassSabi is thinking..." : DEFAULT_PLACEHOLDER;
     setSendButtonState(sendBtn, nextState);
   }
 
@@ -137,6 +181,12 @@ document.addEventListener("DOMContentLoaded", function () {
   renderAll();
   autoResizeInput(input);
 
+  setMessageActionHandlers({
+    onShare: handleShareAction,
+    onLessonTool: handleLessonToolAction,
+    onRetry: retryLastResponse,
+  });
+
   bindSidebarEvents({
     menuBtn,
     sidebar,
@@ -144,6 +194,22 @@ document.addEventListener("DOMContentLoaded", function () {
     newChatBtn,
     onNewChat: startNewChat,
   });
+
+  if (chatSearch) {
+    chatSearch.addEventListener("input", function () {
+      searchQuery = chatSearch.value || "";
+      refreshHistory();
+    });
+
+    chatSearch.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        chatSearch.value = "";
+        searchQuery = "";
+        refreshHistory();
+        chatSearch.blur();
+      }
+    });
+  }
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();
@@ -169,37 +235,351 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  async function sendMessage() {
-    const message = input.value.trim();
-    if (!message) return;
+  function sanitizeFileName(value) {
+    return String(value || "PassSabi-Chat")
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 80);
+  }
+
+  function getExportBaseName(session) {
+    const title = sanitizeFileName(session?.title || "PassSabi-Chat");
+    const date = new Date().toISOString().slice(0, 10);
+    return `PassSabi-${title}-${date}`;
+  }
+
+  function buildPlainTextExport(session) {
+    const lines = [];
+    const createdAt = session?.createdAt ? new Date(session.createdAt) : new Date();
+
+    lines.push("PassSabi AI Chat");
+    lines.push(`Title: ${session?.title || "New Chat"}`);
+    lines.push(`Created: ${createdAt.toLocaleString()}`);
+    lines.push(`Pinned: ${session?.pinned ? "Yes" : "No"}`);
+    lines.push("");
+    lines.push("Conversation");
+    lines.push("------------");
+    lines.push("");
+
+    (session?.messages || []).forEach(function (msg) {
+      const speaker = msg.role === "assistant" ? "PassSabi AI" : "You";
+      lines.push(`${speaker}:`);
+      lines.push(String(msg.text || "").trim());
+      lines.push("");
+    });
+
+    return lines.join("\n").trim();
+  }
+
+  function buildMarkdownExport(session) {
+    const lines = [];
+    const createdAt = session?.createdAt ? new Date(session.createdAt) : new Date();
+
+    lines.push(`# PassSabi AI Chat`);
+    lines.push("");
+    lines.push(`**Title:** ${session?.title || "New Chat"}`);
+    lines.push(`**Created:** ${createdAt.toLocaleString()}`);
+    lines.push(`**Pinned:** ${session?.pinned ? "Yes" : "No"}`);
+    lines.push("");
+    lines.push(`## Conversation`);
+    lines.push("");
+
+    (session?.messages || []).forEach(function (msg) {
+      const speaker = msg.role === "assistant" ? "PassSabi AI" : "You";
+      lines.push(`### ${speaker}`);
+      lines.push("");
+      lines.push(String(msg.text || "").trim());
+      lines.push("");
+    });
+
+    return lines.join("\n").trim();
+  }
+
+  async function copyTextToClipboard(text) {
+    const value = String(text || "").trim();
+    if (!value) return false;
+
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+
+    const temp = document.createElement("textarea");
+    temp.value = value;
+    temp.setAttribute("readonly", "");
+    temp.style.position = "fixed";
+    temp.style.opacity = "0";
+    temp.style.left = "-9999px";
+    document.body.appendChild(temp);
+    temp.select();
+
+    let success = false;
+    try {
+      success = document.execCommand("copy");
+    } catch {
+      success = false;
+    }
+
+    document.body.removeChild(temp);
+    return success;
+  }
+
+  function downloadTextFile(filename, content, mimeType) {
+    const blob = new Blob([content], {
+      type: mimeType || "text/plain;charset=utf-8",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  async function handleShareAction(action) {
+    const session = getCurrentSession();
+    if (!session) return;
+
+    const baseName = getExportBaseName(session);
+    const plainText = buildPlainTextExport(session);
+    const markdown = buildMarkdownExport(session);
+
+    if (action === "pin") {
+      toggleCurrentChatPin();
+      return;
+    }
+
+    if (action === "native-share") {
+      const shareData = {
+        title: session.title || "PassSabi AI Chat",
+        text: plainText,
+        url: window.location.href,
+      };
+
+      try {
+        if (navigator.share) {
+          await navigator.share(shareData);
+        } else {
+          await copyTextToClipboard(plainText);
+        }
+      } catch (error) {
+        console.warn("Native share failed:", error);
+      }
+
+      return;
+    }
+
+    if (action === "txt") {
+      downloadTextFile(`${baseName}.txt`, plainText, "text/plain;charset=utf-8");
+      return;
+    }
+
+    if (action === "md") {
+      downloadTextFile(`${baseName}.md`, markdown, "text/markdown;charset=utf-8");
+    }
+  }
+
+  function buildStudyModePrompt(message) {
+    const text = String(message || "").trim();
+    const lower = text.toLowerCase();
+
+    if (
+      lower.includes("do an exam") ||
+      lower.includes("practice exam") ||
+      lower.includes("mock exam") ||
+      lower.includes("exam me") ||
+      lower.includes("test me") ||
+      lower.includes("set an exam")
+    ) {
+      return {
+        visibleText: text,
+        promptText:
+          "Create a full practice exam for a student on this topic. Give exactly 30 objective questions, numbered from 1 to 30, each with 4 options (A, B, C, D) and the correct answer after each question. After the objectives, add a theory section with 5 theory questions. Keep the numbering sequential and never restart at 1.\n\nTopic:\n" +
+          text,
+      };
+    }
+
+    if (
+      lower.includes("quiz me") ||
+      lower.includes("quiz") ||
+      lower.includes("give me a quiz")
+    ) {
+      return {
+        visibleText: text,
+        promptText:
+          "Create a short quiz on this topic with only 3 to 5 questions. Number the questions properly from 1 onward and do not restart at 1. Keep it simple and student-friendly.\n\nTopic:\n" +
+          text,
+      };
+    }
+
+    return null;
+  }
+
+  function buildLessonPrompt(action, answerText) {
+    const session = getCurrentSession();
+    const lastUser = session
+      ? [...session.messages].reverse().find(function (msg) {
+          return msg.role === "user";
+        })
+      : null;
+
+    const topic = String(
+      lastUser?.text || answerText || session?.title || "this topic"
+    ).trim();
+
+    if (action === "explain") {
+      return {
+        visibleText: "Explain again",
+        promptText:
+          "Explain this topic in simpler words for a student. Use short sentences, step by step, and make it easy to understand. If you number items, number them properly as 1., 2., 3. and do not repeat 1.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    if (action === "example") {
+      return {
+        visibleText: "Give example",
+        promptText:
+          "Give one or two simple real-life examples for this topic and explain them clearly. If you number items, number them properly as 1., 2., 3. and do not repeat 1.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    if (action === "quiz") {
+      return {
+        visibleText: "Quiz me",
+        promptText:
+          "Create a short quiz on this topic with only 3 to 5 questions. Number the questions properly from 1 onward and do not restart at 1. Keep it simple for a student.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    return null;
+  }
+
+  async function handleLessonToolAction(action, context = {}) {
+    if (isGenerating) return;
+
+    const lesson = buildLessonPrompt(action, context.answerText || "");
+    if (!lesson) return;
+
+    clearTransientStatus();
+    startGeneration(lesson.visibleText, {
+      appendUserMessage: true,
+      clearInput: false,
+      visibleText: lesson.visibleText,
+      promptText: lesson.promptText,
+      autoTitle: false,
+    });
+  }
+
+  function renameSession(sessionId = currentChatId) {
+    const session = sessions.find(function (item) {
+      return item.id === sessionId;
+    });
+
+    if (!session) return;
+
+    const nextTitle = window.prompt("Rename chat", session.title || "New Chat");
+    if (nextTitle === null) return;
+
+    const cleanTitle = String(nextTitle).trim();
+    if (!cleanTitle) return;
+
+    session.title = cleanTitle;
+    session.updatedAt = Date.now();
+
+    saveSessions(sessions);
+    refreshHistory();
+    renderAll();
+  }
+
+  function clearTransientStatus() {
+    chatBox
+      .querySelectorAll(".transient-status")
+      .forEach((node) => node.remove());
+  }
+
+  function retryLastResponse() {
+    if (isGenerating) return;
+
+    const session = getCurrentSession();
+    if (!session) return;
+
+    const lastUser = [...session.messages].reverse().find(function (msg) {
+      return msg.role === "user";
+    });
+
+    if (!lastUser) return;
+
+    clearTransientStatus();
+    startGeneration(lastUser.text, {
+      appendUserMessage: false,
+      clearInput: false,
+      visibleText: "Retry",
+      promptText: lastUser.text,
+      autoTitle: false,
+    });
+  }
+
+  async function startGeneration(message, options = {}) {
+    const {
+      appendUserMessage = true,
+      clearInput = false,
+      visibleText = null,
+      promptText = null,
+      autoTitle = true,
+    } = options;
 
     const session = getCurrentSession();
     if (!session) return;
 
     if (isGenerating) return;
 
-    const userMsg = {
-      role: "user",
-      text: message,
-      ts: Date.now(),
-    };
+    clearTransientStatus();
 
-    session.messages.push(userMsg);
+    const promptSource = promptText ?? message;
+    const prompt = String(promptSource || "").trim();
+    if (!prompt) return;
 
-    if (session.title === "New Chat") {
-      session.title = makeSessionTitle(message);
+    const visibleMessage = String(visibleText ?? message ?? prompt).trim();
+
+    if (appendUserMessage) {
+      const userMsg = {
+        role: "user",
+        text: visibleMessage,
+        ts: Date.now(),
+      };
+
+      session.messages.push(userMsg);
+
+      if (autoTitle && session.title === "New Chat") {
+        session.title = makeSessionTitle(visibleMessage);
+      }
+
+      session.updatedAt = Date.now();
+      saveSessions(sessions);
+
+      appendMessage(chatBox, userMsg);
+      refreshHistory();
+      updateWelcomeState(welcomeScreen, session);
+
+      if (clearInput) {
+        input.value = "";
+        autoResizeInput(input);
+      }
+
+      input.blur();
     }
-
-    session.updatedAt = Date.now();
-    saveSessions(sessions);
-
-    appendMessage(chatBox, userMsg);
-    refreshHistory();
-    updateWelcomeState(welcomeScreen, session);
-
-    input.value = "";
-    autoResizeInput(input);
-    input.blur();
 
     appendTypingIndicator(chatBox);
     scrollToBottom(chatBox, false);
@@ -217,7 +597,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     try {
       const finalText = await streamChatReply({
-        message,
+        message: prompt,
         signal: controller.signal,
         onChunk: function (_chunk, fullText) {
           activePartialText = fullText;
@@ -252,13 +632,8 @@ document.addEventListener("DOMContentLoaded", function () {
       session.updatedAt = Date.now();
       saveSessions(sessions);
 
-      if (!activeAssistantBubble) {
-        activeAssistantBubble = createAssistantBubble(chatBox);
-      }
-      updateAssistantBubble(activeAssistantBubble, cleanText);
-
-      refreshHistory();
-      updateWelcomeState(welcomeScreen, session);
+      renderAll();
+      scrollToBottom(chatBox, false);
     } catch (err) {
       console.error("Chat error:", err);
       removeTypingPlaceholders(chatBox);
@@ -276,19 +651,19 @@ document.addEventListener("DOMContentLoaded", function () {
         session.updatedAt = Date.now();
         saveSessions(sessions);
 
-        if (!activeAssistantBubble) {
-          activeAssistantBubble = createAssistantBubble(chatBox);
-        }
-        updateAssistantBubble(activeAssistantBubble, partial);
-
-        refreshHistory();
-        updateWelcomeState(welcomeScreen, session);
+        renderAll();
+        scrollToBottom(chatBox, false);
       } else if (err.name !== "AbortError") {
-        appendMessage(chatBox, {
-          role: "assistant",
-          text: err.message || "Sorry, something went wrong. Please try again.",
-          ts: Date.now(),
-        });
+        appendMessage(
+          chatBox,
+          {
+            role: "assistant",
+            text: "I could not get a response right now. Please tap Retry.",
+            error: true,
+            ts: Date.now(),
+          },
+          { showRetry: true }
+        );
       }
     } finally {
       clearTimeout(timeoutId);
@@ -300,6 +675,36 @@ document.addEventListener("DOMContentLoaded", function () {
       autoResizeInput(input);
       scrollToBottom(chatBox, false);
     }
+  }
+
+  function sendMessage() {
+    const message = input.value.trim();
+    if (!message) return;
+
+    const studyPrompt = buildStudyModePrompt(message);
+
+    startGeneration(message, {
+      appendUserMessage: true,
+      clearInput: true,
+      visibleText: message,
+      promptText: studyPrompt ? studyPrompt.promptText : message,
+      autoTitle: true,
+    });
+  }
+
+  function toggleCurrentChatPin(sessionId = currentChatId) {
+    const session = sessions.find(function (item) {
+      return item.id === sessionId;
+    });
+
+    if (!session) return;
+
+    session.pinned = !session.pinned;
+    session.updatedAt = Date.now();
+
+    saveSessions(sessions);
+    refreshHistory();
+    renderAll();
   }
 
   function switchSession(sessionId) {
@@ -353,31 +758,4 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     if (sessions.length === 0) {
-      const fresh = createSession("New Chat");
-      sessions = [fresh];
-      currentChatId = fresh.id;
-    } else {
-      sessions.sort(function (a, b) {
-        const pinnedA = a.pinned ? 1 : 0;
-        const pinnedB = b.pinned ? 1 : 0;
-        if (pinnedA !== pinnedB) return pinnedB - pinnedA;
-        return b.updatedAt - a.updatedAt;
-      });
-
-      if (
-        deletingCurrent ||
-        !sessions.some(function (item) {
-          return item.id === currentChatId;
-        })
-      ) {
-        currentChatId = sessions[0].id;
-      }
-    }
-
-    saveCurrentChatId(currentChatId);
-    saveSessions(sessions);
-
-    renderAll();
-    input.blur();
-  }
-});
+      const fresh = create
