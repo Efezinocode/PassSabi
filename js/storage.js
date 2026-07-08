@@ -53,12 +53,6 @@ export function createSession(title = "New Chat") {
   });
 }
 
-export function makeSessionTitle(message) {
-  const clean = String(message || "").replace(/\s+/g, " ").trim();
-  if (!clean) return "New Chat";
-  return clean.length > 28 ? `${clean.slice(0, 28).trim()}…` : clean;
-}
-
 export function loadSessions() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -106,6 +100,12 @@ export function saveCurrentChatId(chatId) {
   } catch (error) {
     console.warn("Could not save current chat id", error);
   }
+}
+
+export function makeSessionTitle(message) {
+  const clean = String(message || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "New Chat";
+  return clean.length > 28 ? `${clean.slice(0, 28).trim()}…` : clean;
 }
 
 export function migrateLegacyMessages() {
