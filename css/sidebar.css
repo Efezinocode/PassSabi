@@ -70,8 +70,8 @@ body.sidebar-open {
     z-index: 40;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 18px 16px 20px;
+    gap: 14px;
+    padding: 18px 16px 18px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
 }
@@ -80,10 +80,15 @@ body.sidebar-open {
     transform: translateX(0);
 }
 
+.sidebar-header {
+    padding-bottom: 4px;
+}
+
 .sidebar-header h3 {
     margin: 0 0 4px;
     color: #ffffff;
     font-size: 1.3rem;
+    line-height: 1.2;
 }
 
 .sidebar-header p {
@@ -108,8 +113,14 @@ body.sidebar-open {
     background: #1d4ed8;
 }
 
+.sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
 .sidebar-section h4 {
-    margin: 0 0 10px;
+    margin: 0;
     font-size: 0.95rem;
     color: #cbd5e1;
 }
@@ -117,7 +128,7 @@ body.sidebar-open {
 .history-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
 }
 
@@ -130,6 +141,7 @@ body.sidebar-open {
 
 .history-item-main {
     flex: 1;
+    min-width: 0;
     text-align: left;
     padding: 12px 14px;
     border-radius: 12px;
@@ -138,6 +150,9 @@ body.sidebar-open {
     color: #ffffff;
     font-weight: 600;
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .history-item-main:hover {
@@ -151,15 +166,17 @@ body.sidebar-open {
 
 .history-delete-btn,
 .history-pin-btn {
-    width: 42px;
-    height: 42px;
-    min-width: 42px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
     padding: 0;
+    border: none;
     border-radius: 12px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 1rem;
+    flex: 0 0 auto;
 }
 
 .history-delete-btn {
