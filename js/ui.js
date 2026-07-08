@@ -86,8 +86,39 @@ function renderInlineMarkdown(text) {
   return out;
 }
 
+function normalizeNumberedLines(text) {
+  let current = 1;
+  let insideNumberedList = false;
+
+  return String(text || "")
+    .split(/\r?\n/)
+    .map(function (line) {
+      const trimmed = line.trim();
+
+      if (!trimmed) {
+        insideNumberedList = false;
+        current = 1;
+        return line;
+      }
+
+      const match = line.match(/^(\s*)\d+\.\s+(.*)$/);
+      if (!match) {
+        insideNumberedList = false;
+        return line;
+      }
+
+      if (!insideNumberedList) {
+        current = 1;
+        insideNumberedList = true;
+      }
+
+      return `${match[1]}${current++}. ${match[2]}`;
+    })
+    .join("\n");
+}
+
 function renderMarkdown(text) {
-  const raw = cleanReply(text);
+  const raw = normalizeNumberedLines(cleanReply(text));
   if (!raw) return "";
 
   const codeBlocks = [];
@@ -581,4 +612,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-      }
+    }
