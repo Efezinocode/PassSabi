@@ -2,13 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta
-  name="viewport"
-  content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations, and learning support.">
+
   <title>PassSabi AI Chat | Your Personal AI Teacher</title>
-  <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations and learning support.">
-  <link rel="stylesheet" href="css/style.css">
+
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/sidebar.css">
+  <link rel="stylesheet" href="css/chat.css">
+  <link rel="stylesheet" href="css/animations.css">
+  <link rel="stylesheet" href="css/responsive.css">
 </head>
 
 <body class="chat-page">
@@ -67,26 +71,28 @@
       id="chat-box"
       role="log"
       aria-live="polite"
+      aria-relevant="additions text"
       aria-label="Chat messages">
     </div>
 
     <div class="chat-footer">
       <form id="chat-form" class="chat-input-wrap" autocomplete="off">
-        <input
-          type="text"
+        <textarea
           id="userInput"
           placeholder="Type your question here..."
           required
           spellcheck="false"
-          autocomplete="off">
+          autocomplete="off"
+          rows="1"
+          enterkeyhint="send"></textarea>
 
-        <button id="sendBtn" type="submit" aria-label="Send message">
+        <button id="sendBtn" type="submit" aria-label="Send message" title="Send message">
           ➤
         </button>
       </form>
     </div>
   </main>
 
-  <script src="js/script.js"></script>
+  <script type="module" src="js/chat.js"></script>
 </body>
 </html>
