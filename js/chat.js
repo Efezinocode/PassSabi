@@ -110,7 +110,9 @@ document.addEventListener("DOMContentLoaded", function () {
   function clearTransientStatus() {
     chatBox
       .querySelectorAll(".transient-status")
-      .forEach((node) => node.remove());
+      .forEach(function (node) {
+        node.remove();
+      });
   }
 
   function refreshHistory() {
@@ -152,6 +154,11 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function renderAll() {
+    syncCurrentSessionRender();
+    refreshHistory();
+  }
+
   function setGeneratingState(nextState) {
     isGenerating = nextState;
     input.disabled = nextState;
@@ -166,11 +173,6 @@ document.addEventListener("DOMContentLoaded", function () {
     activeController.abort();
   }
 
-  function renderAll() {
-    syncCurrentSessionRender();
-    refreshHistory();
-  }
-
   function ensureSessionExists() {
     if (state.sessions.length === 0) {
       const fresh = createSession("New Chat");
@@ -180,69 +182,6 @@ document.addEventListener("DOMContentLoaded", function () {
       saveCurrentChatId(state.currentChatId);
     }
   }
-
-  ensureSessionExists();
-  renderAll();
-  autoResizeInput(input);
-
-  const shareCtrl = createChatShareController({
-    getCurrentSession,
-    toggleCurrentChatPin,
-  });
-
-  setMessageActionHandlers({
-    onShare: shareCtrl.handleShareAction,
-    onLessonTool: handleLessonToolAction,
-    onRetry: retryLastResponse,
-  });
-
-  bindSidebarEvents({
-    menuBtn,
-    sidebar,
-    backdrop,
-    newChatBtn,
-    onNewChat: startNewChat,
-  });
-
-  if (chatSearch) {
-    chatSearch.addEventListener("input", function () {
-      state.searchQuery = chatSearch.value || "";
-      refreshHistory();
-    });
-
-    chatSearch.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") {
-        chatSearch.value = "";
-        state.searchQuery = "";
-        refreshHistory();
-        chatSearch.blur();
-      }
-    });
-  }
-
-  form.addEventListener("submit", function (event) {
-    event.preventDefault();
-
-    if (isGenerating) {
-      stopGenerating();
-      return;
-    }
-
-    sendMessage();
-  });
-
-  input.addEventListener("input", function () {
-    autoResizeInput(input);
-  });
-
-  input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      if (input.tagName === "TEXTAREA") {
-        event.preventDefault();
-        if (!isGenerating) sendMessage();
-      }
-    }
-  });
 
   function sanitizeFileName(value) {
     return String(value || "PassSabi-Chat")
@@ -416,27 +355,6 @@ document.addEventListener("DOMContentLoaded", function () {
       promptText: lesson.promptText,
       autoTitle: false,
     });
-  }
-
-  function renameSession(sessionId = state.currentChatId) {
-    const session = state.sessions.find(function (item) {
-      return item.id === sessionId;
-    });
-
-    if (!session) return;
-
-    const nextTitle = window.prompt("Rename chat", session.title || "New Chat");
-    if (nextTitle === null) return;
-
-    const cleanTitle = String(nextTitle).trim();
-    if (!cleanTitle) return;
-
-    session.title = cleanTitle;
-    session.updatedAt = Date.now();
-
-    saveSessions(state.sessions);
-    refreshHistory();
-    renderAll();
   }
 
   function retryLastResponse() {
@@ -712,4 +630,67 @@ document.addEventListener("DOMContentLoaded", function () {
     renderAll();
     input.blur();
   }
+
+  ensureSessionExists();
+  renderAll();
+  autoResizeInput(input);
+
+  const shareCtrl = createChatShareController({
+    getCurrentSession,
+    toggleCurrentChatPin,
+  });
+
+  setMessageActionHandlers({
+    onShare: shareCtrl.handleShareAction,
+    onLessonTool: handleLessonToolAction,
+    onRetry: retryLastResponse,
+  });
+
+  bindSidebarEvents({
+    menuBtn,
+    sidebar,
+    backdrop,
+    newChatBtn,
+    onNewChat: startNewChat,
+  });
+
+  if (chatSearch) {
+    chatSearch.addEventListener("input", function () {
+      state.searchQuery = chatSearch.value || "";
+      refreshHistory();
+    });
+
+    chatSearch.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        chatSearch.value = "";
+        state.searchQuery = "";
+        refreshHistory();
+        chatSearch.blur();
+      }
+    });
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+
+    if (isGenerating) {
+      stopGenerating();
+      return;
+    }
+
+    sendMessage();
+  });
+
+  input.addEventListener("input", function () {
+    autoResizeInput(input);
+  });
+
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      if (input.tagName === "TEXTAREA") {
+        event.preventDefault();
+        if (!isGenerating) sendMessage();
+      }
+    }
+  });
 });
