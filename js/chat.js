@@ -754,4 +754,21 @@ document.addEventListener("DOMContentLoaded", function () {
       const fresh = createSession("New Chat");
       sessions = [fresh];
       currentChatId = fresh.id;
+    } else if (deletingCurrent) {
+      currentChatId = sessions[0].id;
+    }
+
+    saveSessions(sessions);
+    saveCurrentChatId(currentChatId);
+
+    renderAll();
+  }
+
+  function clearTransientStatus() {
+    chatBox
+      .querySelectorAll(".transient-status")
+      .forEach((node) => node.remove());
+  }
+});
+      
   
