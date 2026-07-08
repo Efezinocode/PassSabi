@@ -333,7 +333,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 1000);
   }
 
-  function handleShareAction(action) {
+  async function handleShareAction(action) {
     const session = getCurrentSession();
     if (!session) return;
 
@@ -343,6 +343,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (action === "pin") {
       toggleCurrentChatPin();
+      return;
+    }
+
+    if (action === "native-share") {
+      const shareData = {
+        title: session.title || "PassSabi AI Chat",
+        text: plainText,
+        url: window.location.href,
+      };
+
+      try {
+        if (navigator.share) {
+          await navigator.share(shareData);
+        } else {
+          await copyTextToClipboard(plainText);
+        }
+      } catch (error) {
+        console.warn("Native share failed:", error);
+      }
+
       return;
     }
 
