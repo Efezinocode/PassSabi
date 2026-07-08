@@ -335,6 +335,7 @@ function createAssistantMessageShell(
     };
 
     shareMenu.appendChild(createShareItem(pinned ? "Unpin Chat" : "Pin Chat", "pin", "📌"));
+    shareMenu.appendChild(createShareItem("Share to apps", "native-share", "📤"));
     shareMenu.appendChild(createShareItem("Download .txt", "txt", "↓"));
     shareMenu.appendChild(createShareItem("Download .md", "md", "↓"));
 
@@ -552,4 +553,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-    }
+        }
