@@ -149,4 +149,4 @@ export function getStorageKeys() {
     CURRENT_CHAT_KEY,
     LEGACY_MESSAGES_KEY,
   };
-                                            }
+}
