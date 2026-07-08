@@ -242,3 +242,45 @@
     color: #38bdf8;
     text-decoration: underline;
 }
+
+.assistant-message {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.message-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.message-action-btn {
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 0.88rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.message-action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.message-action-btn.copied {
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.12);
+}
+
+.message-action-btn .action-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
