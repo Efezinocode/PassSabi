@@ -172,8 +172,6 @@ document.addEventListener("DOMContentLoaded", function () {
   autoResizeInput(input);
 
   setMessageActionHandlers({
-    onRegenerate: regenerateLatestResponse,
-    onPin: toggleCurrentChatPin,
     onShare: handleShareAction,
   });
 
@@ -343,10 +341,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const plainText = buildPlainTextExport(session);
     const markdown = buildMarkdownExport(session);
 
-    if (action === "copy") {
-      copyTextToClipboard(plainText).catch(function () {
-        // silent fail
-      });
+    if (action === "pin") {
+      toggleCurrentChatPin();
       return;
     }
 
@@ -497,32 +493,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const message = input.value.trim();
     if (!message) return;
     startGeneration(message, { appendUserMessage: true, clearInput: true });
-  }
-
-  function regenerateLatestResponse() {
-    if (isGenerating) return;
-
-    const session = getCurrentSession();
-    if (!session || session.messages.length < 2) return;
-
-    const lastMessage = session.messages[session.messages.length - 1];
-    const previousMessage = session.messages[session.messages.length - 2];
-
-    if (lastMessage.role !== "assistant" || previousMessage.role !== "user") {
-      return;
-    }
-
-    session.messages.pop();
-    session.updatedAt = Date.now();
-    saveSessions(sessions);
-
-    renderAll();
-    scrollToBottom(chatBox, false);
-
-    startGeneration(previousMessage.text, {
-      appendUserMessage: false,
-      clearInput: false,
-    });
   }
 
   function toggleCurrentChatPin(sessionId = currentChatId) {
