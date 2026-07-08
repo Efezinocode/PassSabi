@@ -248,48 +248,6 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-}
-
-.message-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-    flex-wrap: wrap;
-}
-
-.message-action-btn {
-    background: rgba(255, 255, 255, 0.05);
-    color: #cbd5e1;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 8px 12px;
-    border-radius: 999px;
-    font-size: 0.88rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.message-action-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-}
-
-.message-action-btn.copied {
-    border-color: rgba(16, 185, 129, 0.5);
-    color: #6ee7b7;
-    background: rgba(16, 185, 129, 0.12);
-}
-
-.message-action-btn .action-icon {
-    font-size: 1rem;
-    line-height: 1;
-}
-
-.assistant-message {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
     gap: 8px;
     position: relative;
 }
@@ -327,84 +285,6 @@
     border-color: rgba(250, 204, 21, 0.5);
     color: #fde68a;
     background: rgba(250, 204, 21, 0.12);
-}
-
-.message-action-btn.active {
-    border-color: rgba(56, 189, 248, 0.5);
-    color: #bae6fd;
-    background: rgba(56, 189, 248, 0.14);
-}
-
-.message-action-btn .action-icon {
-    font-size: 1rem;
-    line-height: 1;
-}
-
-.share-menu {
-    display: none;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding-top: 2px;
-}
-
-.share-menu.open {
-    display: flex;
-}
-
-.share-menu-item {
-    background: rgba(15, 23, 42, 0.92);
-    color: #e2e8f0;
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    padding: 8px 12px;
-    border-radius: 999px;
-    font-size: 0.88rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.share-menu-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
-}
-
-
-.assistant-message {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    position: relative;
-}
-
-.message-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.message-action-btn {
-    background: rgba(255, 255, 255, 0.05);
-    color: #cbd5e1;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 8px 12px;
-    border-radius: 999px;
-    font-size: 0.88rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.message-action-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-}
-
-.message-action-btn.copied {
-    border-color: rgba(16, 185, 129, 0.5);
-    color: #6ee7b7;
-    background: rgba(16, 185, 129, 0.12);
 }
 
 .message-action-btn.active {
