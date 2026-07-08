@@ -1,4 +1,3 @@
-// js/chat.js
 import {
   createSession,
   loadSessions,
@@ -10,10 +9,7 @@ import {
   makeSessionTitle,
 } from "./storage.js";
 
-import {
-  bindSidebarEvents,
-  closeSidebar,
-} from "./sidebar.js";
+import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
 
 import {
   appendMessage,
@@ -62,6 +58,8 @@ document.addEventListener("DOMContentLoaded", function () {
   let sessions = loadSessions();
   let currentChatId = loadCurrentChatId();
   let searchQuery = "";
+
+  if (!Array.isArray(sessions)) sessions = [];
 
   if (sessions.length === 0) {
     const migrated = migrateLegacyMessages();
@@ -130,9 +128,9 @@ document.addEventListener("DOMContentLoaded", function () {
           return title.includes(query) || messagesText.includes(query);
         });
 
-    if (historyList) {
-      historyList.innerHTML = "";
-    }
+    if (!historyList) return;
+
+    historyList.innerHTML = "";
 
     if (visibleSessions.length === 0) {
       const empty = document.createElement("p");
@@ -213,6 +211,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();
+    event.stopPropagation();
 
     if (isGenerating) {
       stopGenerating();
@@ -326,25 +325,6 @@ document.addEventListener("DOMContentLoaded", function () {
     return success;
   }
 
-  function downloadTextFile(filename, content, mimeType) {
-    const blob = new Blob([content], {
-      type: mimeType || "text/plain;charset=utf-8",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    window.setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
-  }
-
   async function handleShareAction(action) {
     const session = getCurrentSession();
     if (!session) return;
@@ -386,6 +366,25 @@ document.addEventListener("DOMContentLoaded", function () {
     if (action === "md") {
       downloadTextFile(`${baseName}.md`, markdown, "text/markdown;charset=utf-8");
     }
+  }
+
+  function downloadTextFile(filename, content, mimeType) {
+    const blob = new Blob([content], {
+      type: mimeType || "text/plain;charset=utf-8",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
   }
 
   function buildStudyModePrompt(message) {
@@ -501,12 +500,6 @@ document.addEventListener("DOMContentLoaded", function () {
     saveSessions(sessions);
     refreshHistory();
     renderAll();
-  }
-
-  function clearTransientStatus() {
-    chatBox
-      .querySelectorAll(".transient-status")
-      .forEach((node) => node.remove());
   }
 
   function retryLastResponse() {
@@ -758,4 +751,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     if (sessions.length === 0) {
-      const fresh = create
+      const fresh = createSession("New Chat");
+      sessions = [fresh];
+      currentChatId = fresh.id;
+  
