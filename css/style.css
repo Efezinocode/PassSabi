@@ -8,10 +8,6 @@ html {
     scroll-behavior: smooth;
 }
 
-:root {
-    --keyboard-offset: 0px;
-}
-
 body {
     font-family: Arial, Helvetica, sans-serif;
     background: #0f172a;
@@ -464,7 +460,7 @@ a:hover {
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(var(--keyboard-offset, 0px) + env(safe-area-inset-bottom));
+    bottom: 0;
     width: min(100%, 860px);
     background: rgba(15, 23, 42, 0.98);
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
@@ -560,4 +556,4 @@ a:hover {
     .sidebar {
         width: min(88vw, 320px);
     }
-}
+        }
