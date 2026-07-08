@@ -4,6 +4,8 @@ export function openSidebar(sidebar, backdrop, menuBtn) {
 
   sidebar.classList.add("open");
   backdrop.classList.add("show");
+  document.body.classList.add("sidebar-open");
+
   sidebar.setAttribute("aria-hidden", "false");
   menuBtn.setAttribute("aria-expanded", "true");
 }
@@ -13,6 +15,8 @@ export function closeSidebar(sidebar, backdrop, menuBtn) {
 
   sidebar.classList.remove("open");
   backdrop.classList.remove("show");
+  document.body.classList.remove("sidebar-open");
+
   sidebar.setAttribute("aria-hidden", "true");
   menuBtn.setAttribute("aria-expanded", "false");
 }
