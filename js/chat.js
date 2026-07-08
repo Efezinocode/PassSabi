@@ -45,6 +45,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const sidebar = document.getElementById("sidebar");
   const backdrop = document.getElementById("backdrop");
   const newChatBtn = document.getElementById("newChatBtn");
+  const chatSearch = document.getElementById("chatSearch");
   const historyList = document.getElementById("chat-history");
   const welcomeScreen = document.getElementById("welcome-screen");
 
@@ -58,6 +59,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   let sessions = loadSessions();
   let currentChatId = loadCurrentChatId();
+  let searchQuery = "";
 
   if (sessions.length === 0) {
     const migrated = migrateLegacyMessages();
@@ -102,7 +104,37 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function refreshHistory() {
-    renderHistory(historyList, sessions, currentChatId, {
+    const query = searchQuery.trim().toLowerCase();
+
+    const visibleSessions = !query
+      ? sessions
+      : sessions.filter(function (session) {
+          const title = String(session.title || "").toLowerCase();
+          const messagesText = Array.isArray(session.messages)
+            ? session.messages
+                .map(function (msg) {
+                  return String(msg.text || "");
+                })
+                .join(" ")
+                .toLowerCase()
+            : "";
+
+          return title.includes(query) || messagesText.includes(query);
+        });
+
+    if (historyList) {
+      historyList.innerHTML = "";
+    }
+
+    if (visibleSessions.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "history-empty";
+      empty.textContent = query ? "No chats found." : "No chats yet.";
+      historyList.appendChild(empty);
+      return;
+    }
+
+    renderHistory(historyList, visibleSessions, currentChatId, {
       onSwitch: switchSession,
       onDelete: deleteSession,
       onPin: toggleCurrentChatPin,
@@ -151,6 +183,22 @@ document.addEventListener("DOMContentLoaded", function () {
     newChatBtn,
     onNewChat: startNewChat,
   });
+
+  if (chatSearch) {
+    chatSearch.addEventListener("input", function () {
+      searchQuery = chatSearch.value || "";
+      refreshHistory();
+    });
+
+    chatSearch.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        chatSearch.value = "";
+        searchQuery = "";
+        refreshHistory();
+        chatSearch.blur();
+      }
+    });
+  }
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();
