@@ -113,6 +113,38 @@ body.sidebar-open {
     background: #1d4ed8;
 }
 
+.sidebar-search-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sidebar-search {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+    outline: none;
+    font-size: 0.98rem;
+}
+
+.sidebar-search::placeholder {
+    color: #94a3b8;
+}
+
+.sidebar-search:focus {
+    border-color: rgba(56, 189, 248, 0.5);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.sidebar-search::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
 .sidebar-section {
     display: flex;
     flex-direction: column;
