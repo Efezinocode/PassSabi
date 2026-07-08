@@ -1,4 +1,16 @@
 // js/ui.js
+let messageActionHandlers = {
+  onRegenerate: null,
+  onPin: null,
+};
+
+export function setMessageActionHandlers(handlers = {}) {
+  messageActionHandlers = {
+    ...messageActionHandlers,
+    ...handlers,
+  };
+}
+
 export function cleanReply(text) {
   return String(text || "").trim();
 }
@@ -231,7 +243,11 @@ function showCopiedState(button) {
   }, 1200);
 }
 
-function createAssistantMessageShell(chatBox, rawText = "") {
+function createAssistantMessageShell(
+  chatBox,
+  rawText = "",
+  { showRegenerate = false, showPin = false, pinned = false } = {}
+) {
   const row = document.createElement("div");
   row.className = "chat-row assistant";
 
@@ -263,6 +279,41 @@ function createAssistantMessageShell(chatBox, rawText = "") {
   });
 
   actions.appendChild(copyBtn);
+
+  if (showRegenerate) {
+    const regenerateBtn = document.createElement("button");
+    regenerateBtn.type = "button";
+    regenerateBtn.className = "message-action-btn";
+    regenerateBtn.innerHTML = '<span class="action-icon">↻</span><span>Regenerate</span>';
+    regenerateBtn.title = "Regenerate response";
+    regenerateBtn.setAttribute("aria-label", "Regenerate response");
+
+    regenerateBtn.addEventListener("click", () => {
+      if (typeof messageActionHandlers.onRegenerate === "function") {
+        messageActionHandlers.onRegenerate();
+      }
+    });
+
+    actions.appendChild(regenerateBtn);
+  }
+
+  if (showPin) {
+    const pinBtn = document.createElement("button");
+    pinBtn.type = "button";
+    pinBtn.className = `message-action-btn ${pinned ? "pinned" : ""}`;
+    pinBtn.innerHTML = `<span class="action-icon">${pinned ? "📌" : "📍"}</span><span>${pinned ? "Pinned" : "Pin"}</span>`;
+    pinBtn.title = pinned ? "Unpin chat" : "Pin chat";
+    pinBtn.setAttribute("aria-label", pinned ? "Unpin chat" : "Pin chat");
+
+    pinBtn.addEventListener("click", () => {
+      if (typeof messageActionHandlers.onPin === "function") {
+        messageActionHandlers.onPin();
+      }
+    });
+
+    actions.appendChild(pinBtn);
+  }
+
   wrap.appendChild(bubble);
   wrap.appendChild(actions);
   row.appendChild(wrap);
@@ -271,20 +322,31 @@ function createAssistantMessageShell(chatBox, rawText = "") {
   return bubble;
 }
 
-export function appendMessage(chatBox, msg) {
+export function appendMessage(chatBox, msg, options = {}) {
   if (!chatBox || !msg) return null;
 
   const role = msg.role === "assistant" ? "assistant" : "user";
 
   if (role === "assistant") {
-    const bubble = createAssistantMessageShell(chatBox, msg.text);
-
     if (msg.typing) {
-      bubble.classList.add("typing");
+      const row = document.createElement("div");
+      row.className = "chat-row assistant";
+
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble typing";
       bubble.innerHTML =
         '<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
+
+      row.appendChild(bubble);
+      chatBox.appendChild(row);
       return bubble;
     }
+
+    const bubble = createAssistantMessageShell(chatBox, msg.text, {
+      showRegenerate: Boolean(options.showRegenerate),
+      showPin: Boolean(options.showPin),
+      pinned: Boolean(options.pinned),
+    });
 
     bubble.innerHTML = renderMarkdown(msg.text);
     bubble.dataset.rawText = cleanReply(msg.text);
@@ -306,7 +368,7 @@ export function appendMessage(chatBox, msg) {
 
 export function createAssistantBubble(chatBox) {
   if (!chatBox) return null;
-  return createAssistantMessageShell(chatBox, "");
+  return createAssistantMessageShell(chatBox, "", { showRegenerate: false });
 }
 
 export function updateAssistantBubble(bubble, text) {
@@ -342,8 +404,17 @@ export function renderCurrentSession(chatBox, session) {
 
   if (!session) return;
 
-  session.messages.forEach((msg) => {
-    appendMessage(chatBox, msg);
+  const lastIndex = session.messages.length - 1;
+
+  session.messages.forEach((msg, index) => {
+    const showRegenerate =
+      index === lastIndex && msg && msg.role === "assistant" && !msg.typing;
+
+    appendMessage(chatBox, msg, {
+      showRegenerate,
+      showPin: false,
+      pinned: false,
+    });
   });
 }
 
@@ -386,6 +457,20 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
       }
     });
 
+    const pinBtn = document.createElement("button");
+    pinBtn.type = "button";
+    pinBtn.className = `history-pin-btn ${session.pinned ? "pinned" : ""}`;
+    pinBtn.textContent = session.pinned ? "📌" : "📍";
+    pinBtn.title = session.pinned ? "Unpin chat" : "Pin chat";
+    pinBtn.setAttribute("aria-label", session.pinned ? "Unpin chat" : "Pin chat");
+
+    pinBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (typeof handlers.onPin === "function") {
+        handlers.onPin(session.id);
+      }
+    });
+
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "history-delete-btn";
@@ -401,6 +486,7 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
     });
 
     row.appendChild(mainBtn);
+    row.appendChild(pinBtn);
     row.appendChild(deleteBtn);
     historyList.appendChild(row);
   });
@@ -418,4 +504,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-    }
+}
