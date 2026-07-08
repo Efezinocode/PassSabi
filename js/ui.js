@@ -49,6 +49,135 @@ export function setSendButtonState(sendBtn, isGenerating) {
   }
 }
 
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function linkify(text) {
+  return text.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  );
+}
+
+function renderInlineMarkdown(text) {
+  let out = escapeHtml(text);
+
+  out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+  out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  out = out.replace(/^\s*-\s+(.*)$/gm, "<li>$1</li>");
+  out = out.replace(/^\s*\d+\.\s+(.*)$/gm, "<li>$1</li>");
+  out = linkify(out);
+
+  return out;
+}
+
+function renderMarkdown(text) {
+  const raw = cleanReply(text);
+  if (!raw) return "";
+
+  const codeBlocks = [];
+  let safe = raw.replace(/```([\s\S]*?)```/g, function (_, code) {
+    const token = `__CODE_BLOCK_${codeBlocks.length}__`;
+    codeBlocks.push(
+      `<pre class="md-code"><code>${escapeHtml(code.trim())}</code></pre>`
+    );
+    return token;
+  });
+
+  const lines = safe.split(/\r?\n/);
+  const html = [];
+  let inUl = false;
+  let inOl = false;
+  let inPara = false;
+
+  function closeLists() {
+    if (inUl) {
+      html.push("</ul>");
+      inUl = false;
+    }
+    if (inOl) {
+      html.push("</ol>");
+      inOl = false;
+    }
+  }
+
+  function closePara() {
+    if (inPara) {
+      html.push("</p>");
+      inPara = false;
+    }
+  }
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      closePara();
+      closeLists();
+      continue;
+    }
+
+    if (/^#{1,6}\s+/.test(trimmed)) {
+      closePara();
+      closeLists();
+
+      const level = Math.min(trimmed.match(/^#{1,6}/)[0].length, 6);
+      const content = trimmed.replace(/^#{1,6}\s+/, "");
+      html.push(`<h${level} class="md-h">${renderInlineMarkdown(content)}</h${level}>`);
+      continue;
+    }
+
+    if (/^\-\s+/.test(trimmed)) {
+      closePara();
+      if (!inUl) {
+        closeLists();
+        html.push("<ul class=\"md-list\">");
+        inUl = true;
+      }
+      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`);
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(trimmed)) {
+      closePara();
+      if (!inOl) {
+        closeLists();
+        html.push("<ol class=\"md-list\">");
+        inOl = true;
+      }
+      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`);
+      continue;
+    }
+
+    closeLists();
+    if (!inPara) {
+      html.push("<p class=\"md-p\">");
+      inPara = true;
+    } else {
+      html.push("<br>");
+    }
+    html.push(renderInlineMarkdown(trimmed));
+  }
+
+  closePara();
+  closeLists();
+
+  let out = html.join("");
+
+  codeBlocks.forEach((block, index) => {
+    out = out.replace(`__CODE_BLOCK_${index}__`, block);
+  });
+
+  return out;
+}
+
 export function appendMessage(chatBox, msg) {
   if (!chatBox || !msg) return null;
 
@@ -62,6 +191,9 @@ export function appendMessage(chatBox, msg) {
     bubble.classList.add("typing");
     bubble.innerHTML =
       '<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
+  } else if (msg.role === "assistant") {
+    bubble.classList.add("md-content");
+    bubble.innerHTML = renderMarkdown(msg.text);
   } else {
     bubble.textContent = cleanReply(msg.text);
   }
@@ -79,7 +211,7 @@ export function createAssistantBubble(chatBox) {
   row.className = "chat-row assistant";
 
   const bubble = document.createElement("div");
-  bubble.className = "chat-bubble";
+  bubble.className = "chat-bubble md-content";
 
   row.appendChild(bubble);
   chatBox.appendChild(row);
@@ -89,7 +221,8 @@ export function createAssistantBubble(chatBox) {
 
 export function updateAssistantBubble(bubble, text) {
   if (!bubble) return;
-  bubble.textContent = cleanReply(text);
+  bubble.classList.add("md-content");
+  bubble.innerHTML = renderMarkdown(text);
 }
 
 export function appendTypingIndicator(chatBox) {
@@ -194,4 +327,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-    }
+          }
