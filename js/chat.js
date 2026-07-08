@@ -10,7 +10,10 @@ import {
   makeSessionTitle,
 } from "./storage.js";
 
-import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
+import {
+  bindSidebarEvents,
+  closeSidebar,
+} from "./sidebar.js";
 
 import {
   appendMessage,
@@ -30,8 +33,6 @@ import {
 } from "./ui.js";
 
 import { streamChatReply } from "./api.js";
-import { buildStudyModePrompt, buildLessonPrompt } from "./chatStudy.js";
-import { createChatShareController } from "./chatShare.js";
 
 document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("btn");
@@ -48,8 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const historyList = document.getElementById("chat-history");
   const welcomeScreen = document.getElementById("welcome-screen");
 
-  const DEFAULT_PLACEHOLDER =
-    input?.getAttribute("placeholder") || "Type your question here...";
+  const DEFAULT_PLACEHOLDER = "Type your question here...";
 
   if (btn) {
     btn.addEventListener("click", function () {
@@ -59,33 +59,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (!chatBox || !input || !form) return;
 
-  const state = {
-    sessions: loadSessions(),
-    currentChatId: loadCurrentChatId(),
-    searchQuery: "",
-  };
+  let sessions = loadSessions();
+  let currentChatId = loadCurrentChatId();
+  let searchQuery = "";
 
-  if (state.sessions.length === 0) {
+  if (sessions.length === 0) {
     const migrated = migrateLegacyMessages();
 
     if (migrated) {
-      state.sessions.push(migrated);
+      sessions.push(migrated);
       removeLegacyMessagesKey();
     } else {
-      state.sessions.push(createSession("New Chat"));
+      sessions.push(createSession("New Chat"));
     }
 
-    state.currentChatId = state.sessions[0].id;
-    saveSessions(state.sessions);
-    saveCurrentChatId(state.currentChatId);
+    currentChatId = sessions[0].id;
+    saveSessions(sessions);
+    saveCurrentChatId(currentChatId);
   } else if (
-    !state.currentChatId ||
-    !state.sessions.some(function (session) {
-      return session.id === state.currentChatId;
+    !currentChatId ||
+    !sessions.some(function (session) {
+      return session.id === currentChatId;
     })
   ) {
-    state.currentChatId = state.sessions[0].id;
-    saveCurrentChatId(state.currentChatId);
+    currentChatId = sessions[0].id;
+    saveCurrentChatId(currentChatId);
   }
 
   let isGenerating = false;
@@ -95,8 +93,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function getCurrentSession() {
     return (
-      state.sessions.find(function (session) {
-        return session.id === state.currentChatId;
+      sessions.find(function (session) {
+        return session.id === currentChatId;
       }) || null
     );
   }
@@ -110,17 +108,15 @@ document.addEventListener("DOMContentLoaded", function () {
   function clearTransientStatus() {
     chatBox
       .querySelectorAll(".transient-status")
-      .forEach(function (node) {
-        node.remove();
-      });
+      .forEach((node) => node.remove());
   }
 
   function refreshHistory() {
-    const query = String(state.searchQuery || "").trim().toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
 
     const visibleSessions = !query
-      ? state.sessions
-      : state.sessions.filter(function (session) {
+      ? sessions
+      : sessions.filter(function (session) {
           const title = String(session.title || "").toLowerCase();
           const messagesText = Array.isArray(session.messages)
             ? session.messages
@@ -146,7 +142,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    renderHistory(historyList, visibleSessions, state.currentChatId, {
+    renderHistory(historyList, visibleSessions, currentChatId, {
       onSwitch: switchSession,
       onDelete: deleteSession,
       onPin: toggleCurrentChatPin,
@@ -154,17 +150,10 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  function renderAll() {
-    syncCurrentSessionRender();
-    refreshHistory();
-  }
-
   function setGeneratingState(nextState) {
     isGenerating = nextState;
     input.disabled = nextState;
-    input.placeholder = nextState
-      ? "PassSabi is thinking..."
-      : DEFAULT_PLACEHOLDER;
+    input.placeholder = nextState ? "PassSabi is thinking..." : DEFAULT_PLACEHOLDER;
     setSendButtonState(sendBtn, nextState);
   }
 
@@ -173,15 +162,78 @@ document.addEventListener("DOMContentLoaded", function () {
     activeController.abort();
   }
 
+  function renderAll() {
+    syncCurrentSessionRender();
+    refreshHistory();
+  }
+
   function ensureSessionExists() {
-    if (state.sessions.length === 0) {
+    if (sessions.length === 0) {
       const fresh = createSession("New Chat");
-      state.sessions = [fresh];
-      state.currentChatId = fresh.id;
-      saveSessions(state.sessions);
-      saveCurrentChatId(state.currentChatId);
+      sessions = [fresh];
+      currentChatId = fresh.id;
+      saveSessions(sessions);
+      saveCurrentChatId(currentChatId);
     }
   }
+
+  ensureSessionExists();
+  renderAll();
+  autoResizeInput(input);
+
+  setMessageActionHandlers({
+    onShare: handleShareAction,
+    onLessonTool: handleLessonToolAction,
+    onRetry: retryLastResponse,
+  });
+
+  bindSidebarEvents({
+    menuBtn,
+    sidebar,
+    backdrop,
+    newChatBtn,
+    onNewChat: startNewChat,
+  });
+
+  if (chatSearch) {
+    chatSearch.addEventListener("input", function () {
+      searchQuery = chatSearch.value || "";
+      refreshHistory();
+    });
+
+    chatSearch.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        chatSearch.value = "";
+        searchQuery = "";
+        refreshHistory();
+        chatSearch.blur();
+      }
+    });
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+
+    if (isGenerating) {
+      stopGenerating();
+      return;
+    }
+
+    sendMessage();
+  });
+
+  input.addEventListener("input", function () {
+    autoResizeInput(input);
+  });
+
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      if (input.tagName === "TEXTAREA") {
+        event.preventDefault();
+        if (!isGenerating) sendMessage();
+      }
+    }
+  });
 
   function sanitizeFileName(value) {
     return String(value || "PassSabi-Chat")
@@ -200,9 +252,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function buildPlainTextExport(session) {
     const lines = [];
-    const createdAt = session?.createdAt
-      ? new Date(session.createdAt)
-      : new Date();
+    const createdAt = session?.createdAt ? new Date(session.createdAt) : new Date();
 
     lines.push("PassSabi AI Chat");
     lines.push(`Title: ${session?.title || "New Chat"}`);
@@ -225,9 +275,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function buildMarkdownExport(session) {
     const lines = [];
-    const createdAt = session?.createdAt
-      ? new Date(session.createdAt)
-      : new Date();
+    const createdAt = session?.createdAt ? new Date(session.createdAt) : new Date();
 
     lines.push(`# PassSabi AI Chat`);
     lines.push("");
@@ -340,11 +388,88 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  function handleLessonToolAction(action, context = {}) {
+  function buildStudyModePrompt(message) {
+    const text = String(message || "").trim();
+    const lower = text.toLowerCase();
+
+    if (
+      lower.includes("do an exam") ||
+      lower.includes("practice exam") ||
+      lower.includes("mock exam") ||
+      lower.includes("exam me") ||
+      lower.includes("test me") ||
+      lower.includes("set an exam")
+    ) {
+      return {
+        visibleText: text,
+        promptText:
+          "Create a full practice exam for a student on this topic. Give exactly 30 objective questions, numbered from 1 to 30, each with 4 options (A, B, C, D) and the correct answer after each question. After the objectives, add a theory section with 5 theory questions. Keep the numbering sequential and never restart at 1.\n\nTopic:\n" +
+          text,
+      };
+    }
+
+    if (
+      lower.includes("quiz me") ||
+      lower.includes("quiz") ||
+      lower.includes("give me a quiz")
+    ) {
+      return {
+        visibleText: text,
+        promptText:
+          "Create a short quiz on this topic with only 3 to 5 questions. Number the questions properly from 1 onward and do not restart at 1. Keep it simple and student-friendly.\n\nTopic:\n" +
+          text,
+      };
+    }
+
+    return null;
+  }
+
+  function buildLessonPrompt(action, answerText) {
+    const session = getCurrentSession();
+    const lastUser = session
+      ? [...session.messages].reverse().find(function (msg) {
+          return msg.role === "user";
+        })
+      : null;
+
+    const topic = String(
+      lastUser?.text || answerText || session?.title || "this topic"
+    ).trim();
+
+    if (action === "explain") {
+      return {
+        visibleText: "Explain again",
+        promptText:
+          "Explain this topic in simpler words for a student. Use short sentences, step by step, and make it easy to understand. If you number items, number them properly as 1., 2., 3. and do not repeat 1.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    if (action === "example") {
+      return {
+        visibleText: "Give example",
+        promptText:
+          "Give one or two simple real-life examples for this topic and explain them clearly. If you number items, number them properly as 1., 2., 3. and do not repeat 1.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    if (action === "quiz") {
+      return {
+        visibleText: "Quiz me",
+        promptText:
+          "Create a short quiz on this topic with only 3 to 5 questions. Number the questions properly from 1 onward and do not restart at 1. Keep it simple for a student.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    return null;
+  }
+
+  async function handleLessonToolAction(action, context = {}) {
     if (isGenerating) return;
 
-    const session = getCurrentSession();
-    const lesson = buildLessonPrompt(action, context.answerText || "", session);
+    const lesson = buildLessonPrompt(action, context.answerText || "");
     if (!lesson) return;
 
     clearTransientStatus();
@@ -355,6 +480,33 @@ document.addEventListener("DOMContentLoaded", function () {
       promptText: lesson.promptText,
       autoTitle: false,
     });
+  }
+
+  function renameSession(sessionId = currentChatId) {
+    const session = sessions.find(function (item) {
+      return item.id === sessionId;
+    });
+
+    if (!session) return;
+
+    const nextTitle = window.prompt("Rename chat", session.title || "New Chat");
+    if (nextTitle === null) return;
+
+    const cleanTitle = String(nextTitle).trim();
+    if (!cleanTitle) return;
+
+    session.title = cleanTitle;
+    session.updatedAt = Date.now();
+
+    saveSessions(sessions);
+    refreshHistory();
+    renderAll();
+  }
+
+  function clearTransientStatus() {
+    chatBox
+      .querySelectorAll(".transient-status")
+      .forEach((node) => node.remove());
   }
 
   function retryLastResponse() {
@@ -390,6 +542,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const session = getCurrentSession();
     if (!session) return;
+
     if (isGenerating) return;
 
     clearTransientStatus();
@@ -414,7 +567,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       session.updatedAt = Date.now();
-      saveSessions(state.sessions);
+      saveSessions(sessions);
 
       appendMessage(chatBox, userMsg);
       refreshHistory();
@@ -469,14 +622,15 @@ document.addEventListener("DOMContentLoaded", function () {
         throw new Error("No response text found.");
       }
 
-      session.messages.push({
+      const assistantMsg = {
         role: "assistant",
         text: cleanText,
         ts: Date.now(),
-      });
+      };
 
+      session.messages.push(assistantMsg);
       session.updatedAt = Date.now();
-      saveSessions(state.sessions);
+      saveSessions(sessions);
 
       renderAll();
       scrollToBottom(chatBox, false);
@@ -487,14 +641,15 @@ document.addEventListener("DOMContentLoaded", function () {
       const partial = cleanReply(activePartialText || "");
 
       if (partial) {
-        session.messages.push({
+        const assistantMsg = {
           role: "assistant",
           text: partial,
           ts: Date.now(),
-        });
+        };
 
+        session.messages.push(assistantMsg);
         session.updatedAt = Date.now();
-        saveSessions(state.sessions);
+        saveSessions(sessions);
 
         renderAll();
         scrollToBottom(chatBox, false);
@@ -537,8 +692,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  function toggleCurrentChatPin(sessionId = state.currentChatId) {
-    const session = state.sessions.find(function (item) {
+  function toggleCurrentChatPin(sessionId = currentChatId) {
+    const session = sessions.find(function (item) {
       return item.id === sessionId;
     });
 
@@ -547,7 +702,7 @@ document.addEventListener("DOMContentLoaded", function () {
     session.pinned = !session.pinned;
     session.updatedAt = Date.now();
 
-    saveSessions(state.sessions);
+    saveSessions(sessions);
     refreshHistory();
     renderAll();
   }
@@ -555,8 +710,8 @@ document.addEventListener("DOMContentLoaded", function () {
   function switchSession(sessionId) {
     if (isGenerating) stopGenerating();
 
-    state.currentChatId = sessionId;
-    saveCurrentChatId(state.currentChatId);
+    currentChatId = sessionId;
+    saveCurrentChatId(currentChatId);
     renderAll();
     closeSidebar(sidebar, backdrop, menuBtn);
     input.blur();
@@ -573,11 +728,11 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const newSession = createSession("New Chat");
-    state.sessions.unshift(newSession);
-    state.currentChatId = newSession.id;
+    sessions.unshift(newSession);
+    currentChatId = newSession.id;
 
-    saveCurrentChatId(state.currentChatId);
-    saveSessions(state.sessions);
+    saveCurrentChatId(currentChatId);
+    saveSessions(sessions);
 
     renderAll();
     closeSidebar(sidebar, backdrop, menuBtn);
@@ -585,11 +740,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function deleteSession(sessionId) {
-    if (isGenerating && sessionId === state.currentChatId) {
+    if (isGenerating && sessionId === currentChatId) {
       stopGenerating();
     }
 
-    const session = state.sessions.find(function (item) {
+    const session = sessions.find(function (item) {
       return item.id === sessionId;
     });
     if (!session) return;
@@ -597,100 +752,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const label = session.title || "this chat";
     if (!confirm(`Delete "${label}"?`)) return;
 
-    const deletingCurrent = sessionId === state.currentChatId;
-    state.sessions = state.sessions.filter(function (item) {
+    const deletingCurrent = sessionId === currentChatId;
+    sessions = sessions.filter(function (item) {
       return item.id !== sessionId;
     });
 
-    if (state.sessions.length === 0) {
-      const fresh = createSession("New Chat");
-      state.sessions = [fresh];
-      state.currentChatId = fresh.id;
-    } else {
-      state.sessions.sort(function (a, b) {
-        const pinnedA = a.pinned ? 1 : 0;
-        const pinnedB = b.pinned ? 1 : 0;
-        if (pinnedA !== pinnedB) return pinnedB - pinnedA;
-        return b.updatedAt - a.updatedAt;
-      });
-
-      if (
-        deletingCurrent ||
-        !state.sessions.some(function (item) {
-          return item.id === state.currentChatId;
-        })
-      ) {
-        state.currentChatId = state.sessions[0].id;
-      }
-    }
-
-    saveCurrentChatId(state.currentChatId);
-    saveSessions(state.sessions);
-
-    renderAll();
-    input.blur();
-  }
-
-  ensureSessionExists();
-  renderAll();
-  autoResizeInput(input);
-
-  const shareCtrl = createChatShareController({
-    getCurrentSession,
-    toggleCurrentChatPin,
-  });
-
-  setMessageActionHandlers({
-    onShare: shareCtrl.handleShareAction,
-    onLessonTool: handleLessonToolAction,
-    onRetry: retryLastResponse,
-  });
-
-  bindSidebarEvents({
-    menuBtn,
-    sidebar,
-    backdrop,
-    newChatBtn,
-    onNewChat: startNewChat,
-  });
-
-  if (chatSearch) {
-    chatSearch.addEventListener("input", function () {
-      state.searchQuery = chatSearch.value || "";
-      refreshHistory();
-    });
-
-    chatSearch.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") {
-        chatSearch.value = "";
-        state.searchQuery = "";
-        refreshHistory();
-        chatSearch.blur();
-      }
-    });
-  }
-
-  form.addEventListener("submit", function (event) {
-    event.preventDefault();
-
-    if (isGenerating) {
-      stopGenerating();
-      return;
-    }
-
-    sendMessage();
-  });
-
-  input.addEventListener("input", function () {
-    autoResizeInput(input);
-  });
-
-  input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      if (input.tagName === "TEXTAREA") {
-        event.preventDefault();
-        if (!isGenerating) sendMessage();
-      }
-    }
-  });
-});
+    if (sessions.length === 0) {
+      const fresh = create
