@@ -328,3 +328,27 @@
     background: rgba(255, 255, 255, 0.08);
     color: #ffffff;
 }
+
+.lesson-tools {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.lesson-tool-btn {
+    background: rgba(56, 189, 248, 0.08);
+    color: #bae6fd;
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.lesson-tool-btn:hover {
+    background: rgba(56, 189, 248, 0.14);
+    color: #ffffff;
+}
