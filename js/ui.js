@@ -1,4 +1,3 @@
-// js/ui.js
 let messageActionHandlers = {
   onShare: null,
   onLessonTool: null,
@@ -218,10 +217,7 @@ function highlightCode(code, lang) {
     );
   } else if (["css"].includes(lower)) {
     protect(/\/\*[\s\S]*?\*\//g, "token-comment");
-    protect(
-      /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g,
-      "token-string"
-    );
+    protect(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g, "token-string");
 
     out = out.replace(
       /\b[a-z-]+(?=\s*:)/g,
@@ -312,9 +308,7 @@ function renderMarkdown(text) {
         html.push('<ul class="md-list">');
         inUl = true;
       }
-      html.push(
-        `<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`
-      );
+      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`);
       continue;
     }
 
@@ -325,9 +319,7 @@ function renderMarkdown(text) {
         html.push('<ol class="md-list">');
         inOl = true;
       }
-      html.push(
-        `<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`
-      );
+      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`);
       continue;
     }
 
@@ -679,6 +671,7 @@ export function renderCurrentSession(chatBox, session) {
       showShare: true,
       showLessonTools: msg.role === "assistant" && !msg.typing,
       pinned: Boolean(session.pinned),
+      showRetry: Boolean(msg.error),
     });
   });
 }
@@ -711,9 +704,7 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
 
     const mainBtn = document.createElement("button");
     mainBtn.type = "button";
-    mainBtn.className = `history-item-main ${
-      session.id === currentChatId ? "active" : ""
-    }`;
+    mainBtn.className = `history-item-main ${session.id === currentChatId ? "active" : ""}`;
     mainBtn.textContent = session.title || "New Chat";
 
     mainBtn.addEventListener("click", () => {
@@ -722,9 +713,9 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
       }
     });
 
-    const renameBtn = document.createElement("button");
-    renameBtn.type = "button";
-    renameBtn.className = "history-rename-btn";
-    renameBtn.innerHTML = "✎";
-    renameBtn.title = "Rename chat";
-    renameBtn.setAttribute("aria-label",
+    const pinBtn = document.createElement("button");
+    pinBtn.type = "button";
+    pinBtn.className = "history-mini-btn";
+    pinBtn.title = session.pinned ? "Unpin chat" : "Pin chat";
+    pinBtn.setAttribute("aria-label", session.pinned ? "Unpin chat" : "Pin chat");
+    pinBtn
