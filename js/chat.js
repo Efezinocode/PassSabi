@@ -173,6 +173,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   setMessageActionHandlers({
     onShare: handleShareAction,
+    onLessonTool: handleLessonToolAction,
   });
 
   bindSidebarEvents({
@@ -376,10 +377,68 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function buildLessonPrompt(action, answerText) {
+    const session = getCurrentSession();
+    const lastUser = session
+      ? [...session.messages].reverse().find(function (msg) {
+          return msg.role === "user";
+        })
+      : null;
+
+    const topic = String(lastUser?.text || answerText || session?.title || "this topic").trim();
+
+    if (action === "explain") {
+      return {
+        visibleText: "Explain again",
+        promptText:
+          "Explain this topic in simpler words for a student. Use short sentences, step by step, and make it easy to understand.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    if (action === "example") {
+      return {
+        visibleText: "Give example",
+        promptText:
+          "Give one or two simple real-life examples for this topic and explain them clearly.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    if (action === "quiz") {
+      return {
+        visibleText: "Quiz me",
+        promptText:
+          "Create 5 short quiz questions with answers on this topic. Keep it simple for a student.\n\nTopic:\n" +
+          topic,
+      };
+    }
+
+    return null;
+  }
+
+  async function handleLessonToolAction(action, context = {}) {
+    if (isGenerating) return;
+
+    const lesson = buildLessonPrompt(action, context.answerText || "");
+    if (!lesson) return;
+
+    startGeneration(lesson.visibleText, {
+      appendUserMessage: true,
+      clearInput: false,
+      visibleText: lesson.visibleText,
+      promptText: lesson.promptText,
+      autoTitle: false,
+    });
+  }
+
   async function startGeneration(message, options = {}) {
     const {
       appendUserMessage = true,
       clearInput = false,
+      visibleText = null,
+      promptText = null,
+      autoTitle = true,
     } = options;
 
     const session = getCurrentSession();
@@ -387,20 +446,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (isGenerating) return;
 
-    const prompt = String(message || "").trim();
+    const promptSource = promptText ?? message;
+    const prompt = String(promptSource || "").trim();
     if (!prompt) return;
+
+    const visibleMessage = String(visibleText ?? message ?? prompt).trim();
 
     if (appendUserMessage) {
       const userMsg = {
         role: "user",
-        text: prompt,
+        text: visibleMessage,
         ts: Date.now(),
       };
 
       session.messages.push(userMsg);
 
-      if (session.title === "New Chat") {
-        session.title = makeSessionTitle(prompt);
+      if (autoTitle && session.title === "New Chat") {
+        session.title = makeSessionTitle(visibleMessage);
       }
 
       session.updatedAt = Date.now();
@@ -512,7 +574,14 @@ document.addEventListener("DOMContentLoaded", function () {
   function sendMessage() {
     const message = input.value.trim();
     if (!message) return;
-    startGeneration(message, { appendUserMessage: true, clearInput: true });
+
+    startGeneration(message, {
+      appendUserMessage: true,
+      clearInput: true,
+      visibleText: message,
+      promptText: message,
+      autoTitle: true,
+    });
   }
 
   function toggleCurrentChatPin(sessionId = currentChatId) {
