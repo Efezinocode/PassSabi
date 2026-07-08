@@ -1,7 +1,5 @@
 // js/ui.js
 let messageActionHandlers = {
-  onRegenerate: null,
-  onPin: null,
   onShare: null,
 };
 
@@ -244,10 +242,30 @@ function showCopiedState(button) {
   }, 1200);
 }
 
+let globalShareMenuCloserBound = false;
+
+function bindGlobalShareMenuCloser() {
+  if (globalShareMenuCloserBound) return;
+  globalShareMenuCloserBound = true;
+
+  document.addEventListener("click", function (event) {
+    if (event.target.closest(".share-menu")) return;
+    if (event.target.closest(".message-action-btn")) return;
+
+    document.querySelectorAll(".share-menu.open").forEach((menu) => {
+      menu.classList.remove("open");
+    });
+
+    document.querySelectorAll(".message-action-btn.active").forEach((btn) => {
+      btn.classList.remove("active");
+    });
+  });
+}
+
 function createAssistantMessageShell(
   chatBox,
   rawText = "",
-  { showRegenerate = false, showPin = false, pinned = false, showShare = false } = {}
+  { showShare = false, pinned = false } = {}
 ) {
   const row = document.createElement("div");
   row.className = "chat-row assistant";
@@ -281,50 +299,17 @@ function createAssistantMessageShell(
 
   actions.appendChild(copyBtn);
 
-  if (showRegenerate) {
-    const regenerateBtn = document.createElement("button");
-    regenerateBtn.type = "button";
-    regenerateBtn.className = "message-action-btn";
-    regenerateBtn.innerHTML =
-      '<span class="action-icon">↻</span><span>Regenerate</span>';
-    regenerateBtn.title = "Regenerate response";
-    regenerateBtn.setAttribute("aria-label", "Regenerate response");
-
-    regenerateBtn.addEventListener("click", () => {
-      if (typeof messageActionHandlers.onRegenerate === "function") {
-        messageActionHandlers.onRegenerate();
-      }
-    });
-
-    actions.appendChild(regenerateBtn);
-  }
-
-  if (showPin) {
-    const pinBtn = document.createElement("button");
-    pinBtn.type = "button";
-    pinBtn.className = `message-action-btn ${pinned ? "pinned" : ""}`;
-    pinBtn.innerHTML = `<span class="action-icon">${pinned ? "📌" : "📍"}</span><span>${pinned ? "Pinned" : "Pin"}</span>`;
-    pinBtn.title = pinned ? "Unpin chat" : "Pin chat";
-    pinBtn.setAttribute("aria-label", pinned ? "Unpin chat" : "Pin chat");
-
-    pinBtn.addEventListener("click", () => {
-      if (typeof messageActionHandlers.onPin === "function") {
-        messageActionHandlers.onPin();
-      }
-    });
-
-    actions.appendChild(pinBtn);
-  }
-
   let shareMenu = null;
 
   if (showShare) {
+    bindGlobalShareMenuCloser();
+
     const shareBtn = document.createElement("button");
     shareBtn.type = "button";
     shareBtn.className = "message-action-btn";
     shareBtn.innerHTML = '<span class="action-icon">↗</span><span>Share</span>';
     shareBtn.title = "Share / Export";
-    shareBtn.setAttribute("aria-label", "Share or export chat");
+    shareBtn.setAttribute("aria-label", "Share or export lesson");
 
     shareMenu = document.createElement("div");
     shareMenu.className = "share-menu";
@@ -335,10 +320,13 @@ function createAssistantMessageShell(
       item.className = "share-menu-item";
       item.innerHTML = `<span class="action-icon">${icon}</span><span>${label}</span>`;
 
-      item.addEventListener("click", () => {
+      item.addEventListener("click", (event) => {
+        event.stopPropagation();
+
         if (typeof messageActionHandlers.onShare === "function") {
           messageActionHandlers.onShare(action);
         }
+
         shareMenu.classList.remove("open");
         shareBtn.classList.remove("active");
       });
@@ -346,27 +334,23 @@ function createAssistantMessageShell(
       return item;
     };
 
-    shareMenu.appendChild(createShareItem("Copy Chat", "copy", "⧉"));
+    shareMenu.appendChild(createShareItem(pinned ? "Unpin Chat" : "Pin Chat", "pin", "📌"));
     shareMenu.appendChild(createShareItem("Download .txt", "txt", "↓"));
     shareMenu.appendChild(createShareItem("Download .md", "md", "↓"));
 
     shareBtn.addEventListener("click", (event) => {
       event.stopPropagation();
+
       const isOpen = shareMenu.classList.contains("open");
 
-      if (isOpen) {
-        shareMenu.classList.remove("open");
-        shareBtn.classList.remove("active");
-        return;
-      }
-
-      chatBox.querySelectorAll(".share-menu.open").forEach((menu) => {
+      document.querySelectorAll(".share-menu.open").forEach((menu) => {
         menu.classList.remove("open");
       });
-
-      chatBox.querySelectorAll(".message-action-btn.active").forEach((btn) => {
+      document.querySelectorAll(".message-action-btn.active").forEach((btn) => {
         btn.classList.remove("active");
       });
+
+      if (isOpen) return;
 
       shareMenu.classList.add("open");
       shareBtn.classList.add("active");
@@ -409,10 +393,8 @@ export function appendMessage(chatBox, msg, options = {}) {
     }
 
     const bubble = createAssistantMessageShell(chatBox, msg.text, {
-      showRegenerate: Boolean(options.showRegenerate),
-      showPin: Boolean(options.showPin),
-      pinned: Boolean(options.pinned),
       showShare: Boolean(options.showShare),
+      pinned: Boolean(options.pinned),
     });
 
     bubble.innerHTML = renderMarkdown(msg.text);
@@ -435,7 +417,7 @@ export function appendMessage(chatBox, msg, options = {}) {
 
 export function createAssistantBubble(chatBox) {
   if (!chatBox) return null;
-  return createAssistantMessageShell(chatBox, "", { showRegenerate: false });
+  return createAssistantMessageShell(chatBox, "", { showShare: false });
 }
 
 export function updateAssistantBubble(bubble, text) {
@@ -474,14 +456,12 @@ export function renderCurrentSession(chatBox, session) {
   const lastIndex = session.messages.length - 1;
 
   session.messages.forEach((msg, index) => {
-    const isLastAssistant =
+    const showShare =
       index === lastIndex && msg && msg.role === "assistant" && !msg.typing;
 
     appendMessage(chatBox, msg, {
-      showRegenerate: isLastAssistant,
-      showPin: isLastAssistant,
+      showShare,
       pinned: Boolean(session.pinned),
-      showShare: isLastAssistant,
     });
   });
 }
@@ -572,4 +552,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-                        }
+    }
