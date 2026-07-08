@@ -1,4 +1,7 @@
-/* css/sidebar.css */
+body.sidebar-open {
+    overflow: hidden;
+}
+
 .chat-topbar {
     height: 64px;
     padding: 0 14px;
@@ -40,7 +43,7 @@
 .backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.58);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.25s ease;
@@ -56,8 +59,9 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: min(320px, 88vw);
-    height: 100vh;
+    width: min(380px, 92vw);
+    max-width: 100vw;
+    height: 100dvh;
     background: #0b1020;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     transform: translateX(-100%);
@@ -65,8 +69,8 @@
     z-index: 40;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 18px 16px 20px;
+    gap: 14px;
+    padding: 18px 16px 18px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
 }
@@ -75,10 +79,15 @@
     transform: translateX(0);
 }
 
+.sidebar-header {
+    padding-bottom: 4px;
+}
+
 .sidebar-header h3 {
     margin: 0 0 4px;
     color: #ffffff;
     font-size: 1.3rem;
+    line-height: 1.2;
 }
 
 .sidebar-header p {
@@ -103,8 +112,46 @@
     background: #1d4ed8;
 }
 
+.sidebar-search-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sidebar-search {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+    outline: none;
+    font-size: 0.98rem;
+}
+
+.sidebar-search::placeholder {
+    color: #94a3b8;
+}
+
+.sidebar-search:focus {
+    border-color: rgba(56, 189, 248, 0.5);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.sidebar-search::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
 .sidebar-section h4 {
-    margin: 0 0 10px;
+    margin: 0;
     font-size: 0.95rem;
     color: #cbd5e1;
 }
@@ -112,17 +159,20 @@
 .history-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    width: 100%;
 }
 
 .history-item-row {
     display: flex;
     align-items: center;
     gap: 8px;
+    width: 100%;
 }
 
 .history-item-main {
     flex: 1;
+    min-width: 0;
     text-align: left;
     padding: 12px 14px;
     border-radius: 12px;
@@ -131,6 +181,9 @@
     color: #ffffff;
     font-weight: 600;
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .history-item-main:hover {
@@ -142,22 +195,52 @@
     background: rgba(56, 189, 248, 0.12);
 }
 
-.history-delete-btn {
-    width: 42px;
-    height: 42px;
-    min-width: 42px;
+.history-rename-btn,
+.history-delete-btn,
+.history-pin-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
     padding: 0;
+    border: none;
     border-radius: 12px;
-    background: rgba(239, 68, 68, 0.15);
-    color: #fecaca;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 1rem;
+    flex: 0 0 auto;
+}
+
+.history-rename-btn {
+    background: rgba(168, 85, 247, 0.14);
+    color: #e9d5ff;
+}
+
+.history-rename-btn:hover {
+    background: rgba(168, 85, 247, 0.24);
+}
+
+.history-delete-btn {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fecaca;
 }
 
 .history-delete-btn:hover {
     background: rgba(239, 68, 68, 0.25);
+}
+
+.history-pin-btn {
+    background: rgba(56, 189, 248, 0.12);
+    color: #bae6fd;
+}
+
+.history-pin-btn:hover {
+    background: rgba(56, 189, 248, 0.2);
+}
+
+.history-pin-btn.pinned {
+    background: rgba(250, 204, 21, 0.15);
+    color: #fde68a;
 }
 
 .history-empty {
@@ -171,10 +254,12 @@
     flex-direction: column;
     gap: 10px;
     margin-top: 2px;
+    width: 100%;
 }
 
 .sidebar-nav a {
     display: block;
+    width: 100%;
     padding: 12px 14px;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.04);
