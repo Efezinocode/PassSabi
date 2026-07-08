@@ -16,6 +16,7 @@
 </head>
 
 <body class="chat-page">
+
   <header class="chat-topbar">
     <button
       id="menuBtn"
@@ -41,17 +42,6 @@
     <button id="newChatBtn" type="button" class="sidebar-action">
       + New Chat
     </button>
-
-    <div class="sidebar-search-wrap">
-      <input
-        id="chatSearch"
-        type="search"
-        class="sidebar-search"
-        placeholder="Search chats..."
-        autocomplete="off"
-        spellcheck="false"
-        aria-label="Search chats">
-    </div>
 
     <section class="sidebar-section">
       <h4>Chat History</h4>
@@ -89,11 +79,11 @@
       <form id="chat-form" class="chat-input-wrap" autocomplete="off">
         <textarea
           id="userInput"
-          rows="1"
           placeholder="Type your question here..."
           required
           spellcheck="false"
           autocomplete="off"
+          rows="1"
           enterkeyhint="send"></textarea>
 
         <button id="sendBtn" type="submit" aria-label="Send message" title="Send message">
