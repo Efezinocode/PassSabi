@@ -284,7 +284,8 @@ function createAssistantMessageShell(
     const regenerateBtn = document.createElement("button");
     regenerateBtn.type = "button";
     regenerateBtn.className = "message-action-btn";
-    regenerateBtn.innerHTML = '<span class="action-icon">↻</span><span>Regenerate</span>';
+    regenerateBtn.innerHTML =
+      '<span class="action-icon">↻</span><span>Regenerate</span>';
     regenerateBtn.title = "Regenerate response";
     regenerateBtn.setAttribute("aria-label", "Regenerate response");
 
@@ -407,13 +408,13 @@ export function renderCurrentSession(chatBox, session) {
   const lastIndex = session.messages.length - 1;
 
   session.messages.forEach((msg, index) => {
-    const showRegenerate =
+    const isLastAssistant =
       index === lastIndex && msg && msg.role === "assistant" && !msg.typing;
 
     appendMessage(chatBox, msg, {
-      showRegenerate,
-      showPin: false,
-      pinned: false,
+      showRegenerate: isLastAssistant,
+      showPin: isLastAssistant,
+      pinned: Boolean(session.pinned),
     });
   });
 }
@@ -504,4 +505,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-}
+      }
