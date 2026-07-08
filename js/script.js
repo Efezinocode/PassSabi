@@ -17,6 +17,26 @@ document.addEventListener("DOMContentLoaded", function () {
   const CURRENT_CHAT_KEY = "passsabi_current_chat_id_v1";
   const LEGACY_MESSAGES_KEY = "passsabi_messages_v1";
 
+  function updateKeyboardOffset() {
+    if (!window.visualViewport) return;
+
+    const offset = Math.max(
+      0,
+      window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop
+    );
+
+    document.documentElement.style.setProperty("--keyboard-offset", `${offset}px`);
+  }
+
+  updateKeyboardOffset();
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", updateKeyboardOffset);
+    window.visualViewport.addEventListener("scroll", updateKeyboardOffset);
+  }
+
+  window.addEventListener("resize", updateKeyboardOffset);
+
   if (btn) {
     btn.addEventListener("click", function () {
       window.location.href = "chat.html";
