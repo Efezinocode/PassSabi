@@ -8,6 +8,10 @@ html {
     scroll-behavior: smooth;
 }
 
+:root {
+    --keyboard-offset: 0px;
+}
+
 body {
     font-family: Arial, Helvetica, sans-serif;
     background: #0f172a;
@@ -20,6 +24,7 @@ body {
 body.chat-page {
     margin: 0;
     padding: 0;
+    height: 100dvh;
     overflow: hidden;
     background: #0f172a;
     color: white;
@@ -371,8 +376,8 @@ a:hover {
     background: transparent;
     color: white;
     text-align: left;
-    padding: 8px 0 220px;
-    scroll-padding-bottom: 220px;
+    padding: 8px 0 120px;
+    scroll-padding-bottom: 120px;
 }
 
 .chat-row {
@@ -459,10 +464,10 @@ a:hover {
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
-    bottom: 0;
-    width: min(100%, 760px);
+    bottom: calc(var(--keyboard-offset, 0px) + env(safe-area-inset-bottom));
+    width: min(100%, 860px);
     background: rgba(15, 23, 42, 0.98);
-    padding: 10px 12px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     box-shadow: 0 -1px 8px rgba(0, 0, 0, 0.4);
     z-index: 25;
 }
@@ -476,6 +481,7 @@ a:hover {
 
 #chat-form {
     margin: 0;
+    width: 100%;
 }
 
 #userInput {
@@ -537,9 +543,14 @@ a:hover {
         padding: 14px 10px 12px;
     }
 
+    #chat-box {
+        padding-bottom: 110px;
+        scroll-padding-bottom: 110px;
+    }
+
     .chat-footer {
         width: min(100%, 760px);
-        padding: 10px 10px 12px;
+        padding: 10px 10px calc(12px + env(safe-area-inset-bottom));
     }
 
     .chat-bubble {
@@ -549,5 +560,4 @@ a:hover {
     .sidebar {
         width: min(88vw, 320px);
     }
-    
- 
+}
