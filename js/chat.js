@@ -27,6 +27,7 @@ import {
   removeTypingPlaceholders,
   scrollToBottom,
   setSendButtonState,
+  setMessageActionHandlers,
   updateAssistantBubble,
   updateWelcomeState,
 } from "./ui.js";
@@ -104,6 +105,7 @@ document.addEventListener("DOMContentLoaded", function () {
     renderHistory(historyList, sessions, currentChatId, {
       onSwitch: switchSession,
       onDelete: deleteSession,
+      onPin: toggleCurrentChatPin,
     });
   }
 
@@ -137,6 +139,11 @@ document.addEventListener("DOMContentLoaded", function () {
   renderAll();
   autoResizeInput(input);
 
+  setMessageActionHandlers({
+    onRegenerate: regenerateLatestResponse,
+    onPin: toggleCurrentChatPin,
+  });
+
   bindSidebarEvents({
     menuBtn,
     sidebar,
@@ -169,37 +176,47 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  async function sendMessage() {
-    const message = input.value.trim();
-    if (!message) return;
+  async function startGeneration(message, options = {}) {
+    const {
+      appendUserMessage = true,
+      clearInput = false,
+    } = options;
 
     const session = getCurrentSession();
     if (!session) return;
 
     if (isGenerating) return;
 
-    const userMsg = {
-      role: "user",
-      text: message,
-      ts: Date.now(),
-    };
+    const prompt = String(message || "").trim();
+    if (!prompt) return;
 
-    session.messages.push(userMsg);
+    if (appendUserMessage) {
+      const userMsg = {
+        role: "user",
+        text: prompt,
+        ts: Date.now(),
+      };
 
-    if (session.title === "New Chat") {
-      session.title = makeSessionTitle(message);
+      session.messages.push(userMsg);
+
+      if (session.title === "New Chat") {
+        session.title = makeSessionTitle(prompt);
+      }
+
+      session.updatedAt = Date.now();
+      saveSessions(sessions);
+
+      appendMessage(chatBox, userMsg);
+      refreshHistory();
+      updateWelcomeState(welcomeScreen, session);
+
+      if (clearInput) {
+        input.value = "";
+        autoResizeInput(input);
+      }
+
+      input.blur();
     }
-
-    session.updatedAt = Date.now();
-    saveSessions(sessions);
-
-    appendMessage(chatBox, userMsg);
-    refreshHistory();
-    updateWelcomeState(welcomeScreen, session);
-
-    input.value = "";
-    autoResizeInput(input);
-    input.blur();
 
     appendTypingIndicator(chatBox);
     scrollToBottom(chatBox, false);
@@ -217,7 +234,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     try {
       const finalText = await streamChatReply({
-        message,
+        message: prompt,
         signal: controller.signal,
         onChunk: function (_chunk, fullText) {
           activePartialText = fullText;
@@ -252,13 +269,8 @@ document.addEventListener("DOMContentLoaded", function () {
       session.updatedAt = Date.now();
       saveSessions(sessions);
 
-      if (!activeAssistantBubble) {
-        activeAssistantBubble = createAssistantBubble(chatBox);
-      }
-      updateAssistantBubble(activeAssistantBubble, cleanText);
-
-      refreshHistory();
-      updateWelcomeState(welcomeScreen, session);
+      renderAll();
+      scrollToBottom(chatBox, false);
     } catch (err) {
       console.error("Chat error:", err);
       removeTypingPlaceholders(chatBox);
@@ -276,13 +288,8 @@ document.addEventListener("DOMContentLoaded", function () {
         session.updatedAt = Date.now();
         saveSessions(sessions);
 
-        if (!activeAssistantBubble) {
-          activeAssistantBubble = createAssistantBubble(chatBox);
-        }
-        updateAssistantBubble(activeAssistantBubble, partial);
-
-        refreshHistory();
-        updateWelcomeState(welcomeScreen, session);
+        renderAll();
+        scrollToBottom(chatBox, false);
       } else if (err.name !== "AbortError") {
         appendMessage(chatBox, {
           role: "assistant",
@@ -300,6 +307,53 @@ document.addEventListener("DOMContentLoaded", function () {
       autoResizeInput(input);
       scrollToBottom(chatBox, false);
     }
+  }
+
+  function sendMessage() {
+    const message = input.value.trim();
+    if (!message) return;
+    startGeneration(message, { appendUserMessage: true, clearInput: true });
+  }
+
+  function regenerateLatestResponse() {
+    if (isGenerating) return;
+
+    const session = getCurrentSession();
+    if (!session || session.messages.length < 2) return;
+
+    const lastMessage = session.messages[session.messages.length - 1];
+    const previousMessage = session.messages[session.messages.length - 2];
+
+    if (lastMessage.role !== "assistant" || previousMessage.role !== "user") {
+      return;
+    }
+
+    session.messages.pop();
+    session.updatedAt = Date.now();
+    saveSessions(sessions);
+
+    renderAll();
+    scrollToBottom(chatBox, false);
+
+    startGeneration(previousMessage.text, {
+      appendUserMessage: false,
+      clearInput: false,
+    });
+  }
+
+  function toggleCurrentChatPin(sessionId = currentChatId) {
+    const session = sessions.find(function (item) {
+      return item.id === sessionId;
+    });
+
+    if (!session) return;
+
+    session.pinned = !session.pinned;
+    session.updatedAt = Date.now();
+
+    saveSessions(sessions);
+    refreshHistory();
+    renderAll();
   }
 
   function switchSession(sessionId) {
