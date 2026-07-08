@@ -1,6 +1,7 @@
 // js/ui.js
 let messageActionHandlers = {
   onShare: null,
+  onLessonTool: null,
 };
 
 export function setMessageActionHandlers(handlers = {}) {
@@ -78,12 +79,10 @@ function linkify(text) {
 
 function renderInlineMarkdown(text) {
   let out = escapeHtml(text);
-
   out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
   out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/\*(.+?)\*/g, "<em>$1</em>");
   out = linkify(out);
-
   return out;
 }
 
@@ -152,9 +151,7 @@ function renderMarkdown(text) {
         html.push('<ul class="md-list">');
         inUl = true;
       }
-      html.push(
-        `<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`
-      );
+      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`);
       continue;
     }
 
@@ -165,9 +162,7 @@ function renderMarkdown(text) {
         html.push('<ol class="md-list">');
         inOl = true;
       }
-      html.push(
-        `<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`
-      );
+      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`);
       continue;
     }
 
@@ -185,7 +180,6 @@ function renderMarkdown(text) {
   closeLists();
 
   let out = html.join("");
-
   codeBlocks.forEach((block, index) => {
     out = out.replace(`__CODE_BLOCK_${index}__`, block);
   });
@@ -373,6 +367,39 @@ function createAssistantMessageShell(
   return bubble;
 }
 
+function createLessonToolsRow(chatBox, answerText = "") {
+  const row = document.createElement("div");
+  row.className = "lesson-tools";
+
+  const buttons = [
+    { label: "Explain Again", action: "explain" },
+    { label: "Give Example", action: "example" },
+    { label: "Quiz Me", action: "quiz" },
+  ];
+
+  buttons.forEach((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "lesson-tool-btn";
+    btn.textContent = item.label;
+
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+
+      if (typeof messageActionHandlers.onLessonTool === "function") {
+        messageActionHandlers.onLessonTool(item.action, {
+          answerText: cleanReply(answerText),
+        });
+      }
+    });
+
+    row.appendChild(btn);
+  });
+
+  chatBox.appendChild(row);
+  return row;
+}
+
 export function appendMessage(chatBox, msg, options = {}) {
   if (!chatBox || !msg) return null;
 
@@ -400,6 +427,11 @@ export function appendMessage(chatBox, msg, options = {}) {
 
     bubble.innerHTML = renderMarkdown(msg.text);
     bubble.dataset.rawText = cleanReply(msg.text);
+
+    if (options.showLessonTools) {
+      createLessonToolsRow(chatBox, msg.text);
+    }
+
     return bubble;
   }
 
@@ -454,14 +486,10 @@ export function renderCurrentSession(chatBox, session) {
 
   if (!session) return;
 
-  const lastIndex = session.messages.length - 1;
-
-  session.messages.forEach((msg, index) => {
-    const showShare =
-      index === lastIndex && msg && msg.role === "assistant" && !msg.typing;
-
+  session.messages.forEach((msg) => {
     appendMessage(chatBox, msg, {
-      showShare,
+      showShare: true,
+      showLessonTools: msg.role === "assistant" && !msg.typing,
       pinned: Boolean(session.pinned),
     });
   });
@@ -553,4 +581,4 @@ export function updateWelcomeState(welcomeScreen, session) {
   }
 
   document.body.classList.toggle("has-messages", hasMessages);
-}
+      }
