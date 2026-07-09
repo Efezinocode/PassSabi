@@ -63,14 +63,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (sessions.length === 0) {
     const migrated = migrateLegacyMessages();
-
     if (migrated) {
       sessions.push(migrated);
       removeLegacyMessagesKey();
     } else {
       sessions.push(createSession("New Chat"));
     }
-
     currentChatId = sessions[0].id;
     saveSessions(sessions);
     saveCurrentChatId(currentChatId);
@@ -90,11 +88,13 @@ document.addEventListener("DOMContentLoaded", function () {
   let activePartialText = "";
 
   function getCurrentSession() {
-    return (
-      sessions.find(function (session) {
-        return session.id === currentChatId;
-      }) || null
-    );
+    return sessions.find(function (session) {
+      return session.id === currentChatId;
+    }) || null;
+  }
+
+  function clearTransientStatus() {
+    chatBox.querySelectorAll(".transient-status").forEach((node) => node.remove());
   }
 
   function syncCurrentSessionRender() {
@@ -103,49 +103,30 @@ document.addEventListener("DOMContentLoaded", function () {
     scrollToBottom(chatBox, false);
   }
 
-  function clearTransientStatus() {
-    chatBox
-      .querySelectorAll(".transient-status")
-      .forEach((node) => node.remove());
-  }
-
   function refreshHistory() {
     const query = searchQuery.trim().toLowerCase();
-
     const visibleSessions = !query
       ? sessions
       : sessions.filter(function (session) {
           const title = String(session.title || "").toLowerCase();
           const messagesText = Array.isArray(session.messages)
-            ? session.messages
-                .map(function (msg) {
-                  return String(msg.text || "");
-                })
-                .join(" ")
-                .toLowerCase()
+            ? session.messages.map((msg) => String(msg.text || "")).join(" ").toLowerCase()
             : "";
-
           return title.includes(query) || messagesText.includes(query);
         });
 
     if (!historyList) return;
-
-    historyList.innerHTML = "";
-
-    if (visibleSessions.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "history-empty";
-      empty.textContent = query ? "No chats found." : "No chats yet.";
-      historyList.appendChild(empty);
-      return;
-    }
-
     renderHistory(historyList, visibleSessions, currentChatId, {
       onSwitch: switchSession,
       onDelete: deleteSession,
       onPin: toggleCurrentChatPin,
       onRename: renameSession,
     });
+  }
+
+  function renderAll() {
+    syncCurrentSessionRender();
+    refreshHistory();
   }
 
   function setGeneratingState(nextState) {
@@ -160,11 +141,6 @@ document.addEventListener("DOMContentLoaded", function () {
     activeController.abort();
   }
 
-  function renderAll() {
-    syncCurrentSessionRender();
-    refreshHistory();
-  }
-
   function ensureSessionExists() {
     if (sessions.length === 0) {
       const fresh = createSession("New Chat");
@@ -174,65 +150,6 @@ document.addEventListener("DOMContentLoaded", function () {
       saveCurrentChatId(currentChatId);
     }
   }
-
-  ensureSessionExists();
-  renderAll();
-  autoResizeInput(input);
-
-  setMessageActionHandlers({
-    onShare: handleShareAction,
-    onLessonTool: handleLessonToolAction,
-    onRetry: retryLastResponse,
-  });
-
-  bindSidebarEvents({
-    menuBtn,
-    sidebar,
-    backdrop,
-    newChatBtn,
-    onNewChat: startNewChat,
-  });
-
-  if (chatSearch) {
-    chatSearch.addEventListener("input", function () {
-      searchQuery = chatSearch.value || "";
-      refreshHistory();
-    });
-
-    chatSearch.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") {
-        chatSearch.value = "";
-        searchQuery = "";
-        refreshHistory();
-        chatSearch.blur();
-      }
-    });
-  }
-
-  form.addEventListener("submit", function (event) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (isGenerating) {
-      stopGenerating();
-      return;
-    }
-
-    sendMessage();
-  });
-
-  input.addEventListener("input", function () {
-    autoResizeInput(input);
-  });
-
-  input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      if (input.tagName === "TEXTAREA") {
-        event.preventDefault();
-        if (!isGenerating) sendMessage();
-      }
-    }
-  });
 
   function sanitizeFileName(value) {
     return String(value || "PassSabi-Chat")
@@ -325,6 +242,25 @@ document.addEventListener("DOMContentLoaded", function () {
     return success;
   }
 
+  function downloadTextFile(filename, content, mimeType) {
+    const blob = new Blob([content], {
+      type: mimeType || "text/plain;charset=utf-8",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
   async function handleShareAction(action) {
     const session = getCurrentSession();
     if (!session) return;
@@ -346,15 +282,11 @@ document.addEventListener("DOMContentLoaded", function () {
       };
 
       try {
-        if (navigator.share) {
-          await navigator.share(shareData);
-        } else {
-          await copyTextToClipboard(plainText);
-        }
+        if (navigator.share) await navigator.share(shareData);
+        else await copyTextToClipboard(plainText);
       } catch (error) {
         console.warn("Native share failed:", error);
       }
-
       return;
     }
 
@@ -366,25 +298,6 @@ document.addEventListener("DOMContentLoaded", function () {
     if (action === "md") {
       downloadTextFile(`${baseName}.md`, markdown, "text/markdown;charset=utf-8");
     }
-  }
-
-  function downloadTextFile(filename, content, mimeType) {
-    const blob = new Blob([content], {
-      type: mimeType || "text/plain;charset=utf-8",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    window.setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
   }
 
   function buildStudyModePrompt(message) {
@@ -431,9 +344,7 @@ document.addEventListener("DOMContentLoaded", function () {
         })
       : null;
 
-    const topic = String(
-      lastUser?.text || answerText || session?.title || "this topic"
-    ).trim();
+    const topic = String(lastUser?.text || answerText || session?.title || "this topic").trim();
 
     if (action === "explain") {
       return {
@@ -467,7 +378,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function handleLessonToolAction(action, context = {}) {
     if (isGenerating) return;
-
     const lesson = buildLessonPrompt(action, context.answerText || "");
     if (!lesson) return;
 
@@ -482,10 +392,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function renameSession(sessionId = currentChatId) {
-    const session = sessions.find(function (item) {
-      return item.id === sessionId;
-    });
-
+    const session = sessions.find((item) => item.id === sessionId);
     if (!session) return;
 
     const nextTitle = window.prompt("Rename chat", session.title || "New Chat");
@@ -498,7 +405,6 @@ document.addEventListener("DOMContentLoaded", function () {
     session.updatedAt = Date.now();
 
     saveSessions(sessions);
-    refreshHistory();
     renderAll();
   }
 
@@ -524,172 +430,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  async function startGeneration(message, options = {}) {
-    const {
-      appendUserMessage = true,
-      clearInput = false,
-      visibleText = null,
-      promptText = null,
-      autoTitle = true,
-    } = options;
-
-    const session = getCurrentSession();
-    if (!session) return;
-
-    if (isGenerating) return;
-
-    clearTransientStatus();
-
-    const promptSource = promptText ?? message;
-    const prompt = String(promptSource || "").trim();
-    if (!prompt) return;
-
-    const visibleMessage = String(visibleText ?? message ?? prompt).trim();
-
-    if (appendUserMessage) {
-      const userMsg = {
-        role: "user",
-        text: visibleMessage,
-        ts: Date.now(),
-      };
-
-      session.messages.push(userMsg);
-
-      if (autoTitle && session.title === "New Chat") {
-        session.title = makeSessionTitle(visibleMessage);
-      }
-
-      session.updatedAt = Date.now();
-      saveSessions(sessions);
-
-      appendMessage(chatBox, userMsg);
-      refreshHistory();
-      updateWelcomeState(welcomeScreen, session);
-
-      if (clearInput) {
-        input.value = "";
-        autoResizeInput(input);
-      }
-
-      input.blur();
-    }
-
-    appendTypingIndicator(chatBox);
-    scrollToBottom(chatBox, false);
-
-    const controller = new AbortController();
-    activeController = controller;
-    activeAssistantBubble = null;
-    activePartialText = "";
-
-    setGeneratingState(true);
-
-    const timeoutId = setTimeout(function () {
-      controller.abort();
-    }, 90000);
-
-    try {
-      const finalText = await streamChatReply({
-        message: prompt,
-        signal: controller.signal,
-        onChunk: function (_chunk, fullText) {
-          activePartialText = fullText;
-
-          if (!activeAssistantBubble) {
-            removeTypingPlaceholders(chatBox);
-            activeAssistantBubble = createAssistantBubble(chatBox);
-          }
-
-          updateAssistantBubble(activeAssistantBubble, fullText);
-          autoScrollIfNeeded(chatBox, 80, false);
-        },
-        onDone: function (provider) {
-          console.log("Answered by:", provider);
-        },
-      });
-
-      removeTypingPlaceholders(chatBox);
-
-      const cleanText = cleanReply(finalText || activePartialText || "No response.");
-      if (!cleanText) {
-        throw new Error("No response text found.");
-      }
-
-      const assistantMsg = {
-        role: "assistant",
-        text: cleanText,
-        ts: Date.now(),
-      };
-
-      session.messages.push(assistantMsg);
-      session.updatedAt = Date.now();
-      saveSessions(sessions);
-
-      renderAll();
-      scrollToBottom(chatBox, false);
-    } catch (err) {
-      console.error("Chat error:", err);
-      removeTypingPlaceholders(chatBox);
-
-      const partial = cleanReply(activePartialText || "");
-
-      if (partial) {
-        const assistantMsg = {
-          role: "assistant",
-          text: partial,
-          ts: Date.now(),
-        };
-
-        session.messages.push(assistantMsg);
-        session.updatedAt = Date.now();
-        saveSessions(sessions);
-
-        renderAll();
-        scrollToBottom(chatBox, false);
-      } else if (err.name !== "AbortError") {
-        appendMessage(
-          chatBox,
-          {
-            role: "assistant",
-            text: "I could not get a response right now. Please tap Retry.",
-            error: true,
-            ts: Date.now(),
-          },
-          { showRetry: true }
-        );
-      }
-    } finally {
-      clearTimeout(timeoutId);
-      activeController = null;
-      activeAssistantBubble = null;
-      activePartialText = "";
-      setGeneratingState(false);
-      input.blur();
-      autoResizeInput(input);
-      scrollToBottom(chatBox, false);
-    }
-  }
-
-  function sendMessage() {
-    const message = input.value.trim();
-    if (!message) return;
-
-    const studyPrompt = buildStudyModePrompt(message);
-
-    startGeneration(message, {
-      appendUserMessage: true,
-      clearInput: true,
-      visibleText: message,
-      promptText: studyPrompt ? studyPrompt.promptText : message,
-      autoTitle: true,
-    });
-  }
-
   function toggleCurrentChatPin(sessionId = currentChatId) {
-    const session = sessions.find(function (item) {
-      return item.id === sessionId;
-    });
-
+    const session = sessions.find((item) => item.id === sessionId);
     if (!session) return;
 
     session.pinned = !session.pinned;
@@ -702,7 +444,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function switchSession(sessionId) {
     if (isGenerating) stopGenerating();
-
     currentChatId = sessionId;
     saveCurrentChatId(currentChatId);
     renderAll();
@@ -733,22 +474,16 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function deleteSession(sessionId) {
-    if (isGenerating && sessionId === currentChatId) {
-      stopGenerating();
-    }
+    if (isGenerating && sessionId === currentChatId) stopGenerating();
 
-    const session = sessions.find(function (item) {
-      return item.id === sessionId;
-    });
+    const session = sessions.find((item) => item.id === sessionId);
     if (!session) return;
 
     const label = session.title || "this chat";
     if (!confirm(`Delete "${label}"?`)) return;
 
     const deletingCurrent = sessionId === currentChatId;
-    sessions = sessions.filter(function (item) {
-      return item.id !== sessionId;
-    });
+    sessions = sessions.filter((item) => item.id !== sessionId);
 
     if (sessions.length === 0) {
       const fresh = createSession("New Chat");
@@ -760,15 +495,202 @@ document.addEventListener("DOMContentLoaded", function () {
 
     saveSessions(sessions);
     saveCurrentChatId(currentChatId);
-
     renderAll();
   }
 
-  function clearTransientStatus() {
-    chatBox
-      .querySelectorAll(".transient-status")
-      .forEach((node) => node.remove());
+  async function startGeneration(message, options = {}) {
+    const {
+      appendUserMessage = true,
+      clearInput = false,
+      visibleText = null,
+      promptText = null,
+      autoTitle = true,
+    } = options;
+
+    const session = getCurrentSession();
+    if (!session || isGenerating) return;
+
+    clearTransientStatus();
+
+    const promptSource = promptText ?? message;
+    const prompt = String(promptSource || "").trim();
+    if (!prompt) return;
+
+    const visibleMessage = String(visibleText ?? message ?? prompt).trim();
+
+    if (appendUserMessage) {
+      const userMsg = { role: "user", text: visibleMessage, ts: Date.now() };
+      session.messages.push(userMsg);
+
+      if (autoTitle && session.title === "New Chat") {
+        session.title = makeSessionTitle(visibleMessage);
+      }
+
+      session.updatedAt = Date.now();
+      saveSessions(sessions);
+
+      appendMessage(chatBox, userMsg);
+      refreshHistory();
+      updateWelcomeState(welcomeScreen, session);
+
+      if (clearInput) {
+        input.value = "";
+        autoResizeInput(input);
+      }
+
+      input.blur();
+    }
+
+    appendTypingIndicator(chatBox);
+    scrollToBottom(chatBox, false);
+
+    const controller = new AbortController();
+    activeController = controller;
+    activeAssistantBubble = null;
+    activePartialText = "";
+    setGeneratingState(true);
+
+    const timeoutId = setTimeout(function () {
+      controller.abort();
+    }, 90000);
+
+    try {
+      const finalText = await streamChatReply({
+        message: prompt,
+        signal: controller.signal,
+        onChunk: function (_chunk, fullText) {
+          activePartialText = fullText;
+          if (!activeAssistantBubble) {
+            removeTypingPlaceholders(chatBox);
+            activeAssistantBubble = createAssistantBubble(chatBox);
+          }
+          updateAssistantBubble(activeAssistantBubble, fullText);
+          autoScrollIfNeeded(chatBox, 80, false);
+        },
+        onDone: function (provider) {
+          console.log("Answered by:", provider);
+        },
+      });
+
+      removeTypingPlaceholders(chatBox);
+
+      const cleanText = cleanReply(finalText || activePartialText || "No response.");
+      if (!cleanText) throw new Error("No response text found.");
+
+      const assistantMsg = { role: "assistant", text: cleanText, ts: Date.now() };
+      session.messages.push(assistantMsg);
+      session.updatedAt = Date.now();
+      saveSessions(sessions);
+
+      renderAll();
+      scrollToBottom(chatBox, false);
+    } catch (err) {
+      console.error("Chat error:", err);
+      removeTypingPlaceholders(chatBox);
+
+      const partial = cleanReply(activePartialText || "");
+      if (partial) {
+        const assistantMsg = { role: "assistant", text: partial, ts: Date.now() };
+        session.messages.push(assistantMsg);
+        session.updatedAt = Date.now();
+        saveSessions(sessions);
+        renderAll();
+        scrollToBottom(chatBox, false);
+      } else if (err?.name !== "AbortError") {
+        appendMessage(
+          chatBox,
+          {
+            role: "assistant",
+            text: "I could not get a response right now. Please tap Retry.",
+            error: true,
+            ts: Date.now(),
+          },
+          { showRetry: true }
+        );
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      activeController = null;
+      activeAssistantBubble = null;
+      activePartialText = "";
+      setGeneratingState(false);
+      input.blur();
+      autoResizeInput(input);
+      scrollToBottom(chatBox, false);
+    }
   }
+
+  function sendMessage() {
+    const message = input.value.trim();
+    if (!message) return;
+
+    const studyPrompt = buildStudyModePrompt(message);
+    startGeneration(message, {
+      appendUserMessage: true,
+      clearInput: true,
+      visibleText: message,
+      promptText: studyPrompt ? studyPrompt.promptText : message,
+      autoTitle: true,
+    });
+  }
+
+  ensureSessionExists();
+  renderAll();
+  autoResizeInput(input);
+  setSendButtonState(sendBtn, false);
+
+  setMessageActionHandlers({
+    onShare: handleShareAction,
+    onLessonTool: handleLessonToolAction,
+    onRetry: retryLastResponse,
+  });
+
+  bindSidebarEvents({
+    menuBtn,
+    sidebar,
+    backdrop,
+    newChatBtn,
+    onNewChat: startNewChat,
+  });
+
+  if (chatSearch) {
+    chatSearch.addEventListener("input", function () {
+      searchQuery = chatSearch.value || "";
+      refreshHistory();
+    });
+
+    chatSearch.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        chatSearch.value = "";
+        searchQuery = "";
+        refreshHistory();
+        chatSearch.blur();
+      }
+    });
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (isGenerating) {
+      stopGenerating();
+      return;
+    }
+
+    sendMessage();
+  });
+
+  input.addEventListener("input", function () {
+    autoResizeInput(input);
+  });
+
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      if (input.tagName === "TEXTAREA") {
+        event.preventDefault();
+        if (!isGenerating) sendMessage();
+      }
+    }
+  });
 });
-      
-  
