@@ -1,14 +1,11 @@
-mpinBtnopinBtBtntateeActionHandlerspinBtnopipinBtBtntateeActionHandlers = {
+let messageActionHandlers = {
   onShare: null,
   onLessonTool: null,
   onRetry: null,
 };
 
 export function setMessageActionHandlers(handlers = {}) {
-  messageActionHandlers = {
-    ...messageActionHandlers,
-    ...handlers,
-  };
+  messageActionHandlers = { ...messageActionHandlers, ...handlers };
 }
 
 export function cleanReply(text) {
@@ -17,39 +14,35 @@ export function cleanReply(text) {
 
 export function isNearBottom(container, threshold = 120) {
   if (!container) return true;
-
   const distanceFromBottom =
     container.scrollHeight - container.scrollTop - container.clientHeight;
-
   return distanceFromBottom <= threshold;
 }
 
 export function scrollToBottom(container, smooth = false) {
   if (!container) return;
-
-  container.scrollTo({
-    top: container.scrollHeight,
-    behavior: smooth ? "smooth" : "auto",
-  });
-}
-
-export function autoScrollIfNeeded(container, threshold = 120, smooth = false) {
-  if (isNearBottom(container, threshold)) {
-    scrollToBottom(container, smooth);
+  try {
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: smooth ? "smooth" : "auto",
+    });
+  } catch {
+    container.scrollTop = container.scrollHeight;
   }
 }
 
-export function autoResizeInput(input) {
-  if (!input) return;
-  if (input.tagName !== "TEXTAREA") return;
+export function autoScrollIfNeeded(container, threshold = 120, smooth = false) {
+  if (isNearBottom(container, threshold)) scrollToBottom(container, smooth);
+}
 
+export function autoResizeInput(input) {
+  if (!input || input.tagName !== "TEXTAREA") return;
   input.style.height = "auto";
   input.style.height = `${Math.min(input.scrollHeight, 180)}px`;
 }
 
 export function setSendButtonState(sendBtn, isGenerating) {
   if (!sendBtn) return;
-
   if (isGenerating) {
     sendBtn.textContent = "■";
     sendBtn.setAttribute("aria-label", "Stop generating");
@@ -88,155 +81,29 @@ function renderInlineMarkdown(text) {
 
 function normalizeNumberedLines(text) {
   let current = 1;
-  let insideNumberedList = false;
+  let inside = false;
 
   return String(text || "")
     .split(/\r?\n/)
-    .map(function (line) {
+    .map((line) => {
       const trimmed = line.trim();
-
       if (!trimmed) {
-        insideNumberedList = false;
+        inside = false;
         current = 1;
         return line;
       }
-
       const match = line.match(/^(\s*)\d+\.\s+(.*)$/);
       if (!match) {
-        insideNumberedList = false;
+        inside = false;
         return line;
       }
-
-      if (!insideNumberedList) {
+      if (!inside) {
+        inside = true;
         current = 1;
-        insideNumberedList = true;
       }
-
       return `${match[1]}${current++}. ${match[2]}`;
     })
     .join("\n");
-}
-
-function stowToken(stash, html) {
-  const token = `__TOKEN_${stash.length}__`;
-  stash.push({ token, html });
-  return token;
-}
-
-function restoreTokens(text, stash) {
-  let out = text;
-  stash.forEach(function (item) {
-    out = out.split(item.token).join(item.html);
-  });
-  return out;
-}
-
-function highlightCode(code, lang) {
-  const lower = String(lang || "").toLowerCase();
-  let out = escapeHtml(code.trimEnd());
-  const stash = [];
-
-  function protect(regex, cls) {
-    out = out.replace(regex, function (match) {
-      return stowToken(stash, `<span class="${cls}">${match}</span>`);
-    });
-  }
-
-  if (["js", "javascript", "ts", "typescript", "jsx", "tsx"].includes(lower)) {
-    protect(/\/\*[\s\S]*?\*\//g, "token-comment");
-    protect(/\/\/[^\n]*/g, "token-comment");
-    protect(
-      /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/g,
-      "token-string"
-    );
-
-    out = out.replace(
-      /\b(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|class|extends|new|try|catch|finally|throw|async|await|import|from|export|default|true|false|null|undefined|this|super|of|in|typeof|instanceof|void)\b/g,
-      function (match) {
-        return stowToken(stash, `<span class="token-keyword">${match}</span>`);
-      }
-    );
-
-    out = out.replace(/\b\d+(\.\d+)?\b/g, function (match) {
-      return stowToken(stash, `<span class="token-number">${match}</span>`);
-    });
-  } else if (["py", "python"].includes(lower)) {
-    protect(/#[^\n]*/g, "token-comment");
-    protect(
-      /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g,
-      "token-string"
-    );
-
-    out = out.replace(
-      /\b(?:def|class|return|if|elif|else|for|while|break|continue|import|from|as|try|except|finally|raise|with|lambda|pass|True|False|None|and|or|not|in|is)\b/g,
-      function (match) {
-        return stowToken(stash, `<span class="token-keyword">${match}</span>`);
-      }
-    );
-
-    out = out.replace(/\b\d+(\.\d+)?\b/g, function (match) {
-      return stowToken(stash, `<span class="token-number">${match}</span>`);
-    });
-  } else if (["json"].includes(lower)) {
-    out = out.replace(
-      /"(?:\\.|[^"\\])*"(?=\s*:)/g,
-      function (match) {
-        return stowToken(stash, `<span class="token-attr">${match}</span>`);
-      }
-    );
-
-    out = out.replace(
-      /"(?:\\.|[^"\\])*"|true|false|null|\b\d+(\.\d+)?\b/g,
-      function (match) {
-        if (match === "true" || match === "false" || match === "null") {
-          return stowToken(stash, `<span class="token-boolean">${match}</span>`);
-        }
-        if (/^\d/.test(match)) {
-          return stowToken(stash, `<span class="token-number">${match}</span>`);
-        }
-        return stowToken(stash, `<span class="token-string">${match}</span>`);
-      }
-    );
-  } else if (["bash", "sh", "shell", "zsh"].includes(lower)) {
-    protect(/#[^\n]*/g, "token-comment");
-    protect(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g, "token-string");
-
-    out = out.replace(
-      /\b(?:cd|ls|pwd|mkdir|rm|cp|mv|touch|cat|echo|npm|node|git|curl|wget|chmod|sudo|apt|yum|pip|python|bash|sh|zsh|export|return|if|then|else|fi|for|in|do|done)\b/g,
-      function (match) {
-        return stowToken(stash, `<span class="token-keyword">${match}</span>`);
-      }
-    );
-  } else if (["html", "xml"].includes(lower)) {
-    out = out.replace(
-      /(&lt;\/?)([a-zA-Z][\w:-]*)([\s\S]*?&gt;)/g,
-      function (_, open, tag, rest) {
-        const tagHtml = `${open}<span class="token-tag">${tag}</span>${rest}`;
-        return stowToken(stash, tagHtml);
-      }
-    );
-  } else if (["css"].includes(lower)) {
-    protect(/\/\*[\s\S]*?\*\//g, "token-comment");
-    protect(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g, "token-string");
-
-    out = out.replace(
-      /\b[a-z-]+(?=\s*:)/g,
-      function (match) {
-        return stowToken(stash, `<span class="token-attr">${match}</span>`);
-      }
-    );
-  } else {
-    protect(/\/\*[\s\S]*?\*\//g, "token-comment");
-    protect(/\/\/[^\n]*/g, "token-comment");
-  }
-
-  return restoreTokens(out, stash);
-}
-
-function renderCodeBlock(code, lang) {
-  const language = String(lang || "").toLowerCase() || "text";
-  const highlighted = highlightCode(code, language);
-  return `<pre class="md-code"><code class="language-${language} code-${language}">${highlighted}</code></pre>`;
 }
 
 function renderMarkdown(text) {
@@ -246,11 +113,7 @@ function renderMarkdown(text) {
   const codeBlocks = [];
   let safe = raw.replace(/```([\w-]+)?\s*\n?([\s\S]*?)```/g, function (_, lang, code) {
     const token = `__CODE_BLOCK_${codeBlocks.length}__`;
-    codeBlocks.push({
-      token,
-      lang: String(lang || "").toLowerCase(),
-      code,
-    });
+    codeBlocks.push({ token, lang: String(lang || "").toLowerCase(), code });
     return token;
   });
 
@@ -282,7 +145,6 @@ function renderMarkdown(text) {
 
   for (const line of lines) {
     const trimmed = line.trim();
-
     if (!trimmed) {
       closePara();
       closeLists();
@@ -292,12 +154,9 @@ function renderMarkdown(text) {
     if (/^#{1,6}\s+/.test(trimmed)) {
       closePara();
       closeLists();
-
       const level = Math.min(trimmed.match(/^#{1,6}/)[0].length, 6);
       const content = trimmed.replace(/^#{1,6}\s+/, "");
-      html.push(
-        `<h${level} class="md-h">${renderInlineMarkdown(content)}</h${level}>`
-      );
+      html.push(`<h${level} class="md-h">${renderInlineMarkdown(content)}</h${level}>`);
       continue;
     }
 
@@ -337,11 +196,12 @@ function renderMarkdown(text) {
   closeLists();
 
   let out = html.join("");
-
-  codeBlocks.forEach(function (block) {
-    out = out.split(block.token).join(renderCodeBlock(block.code, block.lang));
+  codeBlocks.forEach((block) => {
+    const codeHtml = `<pre class="md-code"><code class="language-${block.lang || "text"} code-${block.lang || "text"}">${escapeHtml(
+      block.code.trimEnd()
+    )}</code></pre>`;
+    out = out.split(block.token).join(codeHtml);
   });
-
   return out;
 }
 
@@ -374,7 +234,7 @@ async function copyTextToClipboard(text) {
   return success;
 }
 
-function showCopipinBtBtntate(button) {
+function showCopiedState(button) {
   if (!button) return;
 
   const originalHtml = button.innerHTML;
@@ -404,21 +264,12 @@ function bindGlobalShareMenuCloser() {
     if (event.target.closest(".share-menu")) return;
     if (event.target.closest(".message-action-btn")) return;
 
-    document.querySelectorAll(".share-menu.open").forEach((menu) => {
-      menu.classList.remove("open");
-    });
-
-    document.querySelectorAll(".message-action-btn.active").forEach((btn) => {
-      btn.classList.remove("active");
-    });
+    document.querySelectorAll(".share-menu.open").forEach((menu) => menu.classList.remove("open"));
+    document.querySelectorAll(".message-action-btn.active").forEach((btn) => btn.classList.remove("active"));
   });
 }
 
-function createAssistantMessageShell(
-  chatBox,
-  rawText = "",
-  { showShare = false, pinned = false, showRetry = false } = {}
-) {
+function createAssistantMessageShell(chatBox, rawText = "", { showShare = false, pinned = false, showRetry = false } = {}) {
   const row = document.createElement("div");
   row.className = "chat-row assistant";
 
@@ -438,17 +289,13 @@ function createAssistantMessageShell(
   copyBtn.innerHTML = '<span class="action-icon">⧉</span><span>Copy</span>';
   copyBtn.title = "Copy message";
   copyBtn.setAttribute("aria-label", "Copy message");
-
   copyBtn.addEventListener("click", async () => {
     const textToCopy = bubble.dataset.rawText || cleanReply(bubble.textContent);
     try {
       const copied = await copyTextToClipboard(textToCopy);
       if (copied) showCopiedState(copyBtn);
-    } catch {
-      // silent fail
-    }
+    } catch {}
   });
-
   actions.appendChild(copyBtn);
 
   if (showRetry) {
@@ -458,13 +305,11 @@ function createAssistantMessageShell(
     retryBtn.innerHTML = '<span class="action-icon">↻</span><span>Retry</span>';
     retryBtn.title = "Retry response";
     retryBtn.setAttribute("aria-label", "Retry response");
-
     retryBtn.addEventListener("click", () => {
       if (typeof messageActionHandlers.onRetry === "function") {
         messageActionHandlers.onRetry();
       }
     });
-
     actions.appendChild(retryBtn);
   }
 
@@ -488,18 +333,14 @@ function createAssistantMessageShell(
       item.type = "button";
       item.className = "share-menu-item";
       item.innerHTML = `<span class="action-icon">${icon}</span><span>${label}</span>`;
-
       item.addEventListener("click", (event) => {
         event.stopPropagation();
-
         if (typeof messageActionHandlers.onShare === "function") {
           messageActionHandlers.onShare(action);
         }
-
         shareMenu.classList.remove("open");
         shareBtn.classList.remove("active");
       });
-
       return item;
     };
 
@@ -512,13 +353,8 @@ function createAssistantMessageShell(
       event.stopPropagation();
 
       const isOpen = shareMenu.classList.contains("open");
-
-      document.querySelectorAll(".share-menu.open").forEach((menu) => {
-        menu.classList.remove("open");
-      });
-      document.querySelectorAll(".message-action-btn.active").forEach((btn) => {
-        btn.classList.remove("active");
-      });
+      document.querySelectorAll(".share-menu.open").forEach((menu) => menu.classList.remove("open"));
+      document.querySelectorAll(".message-action-btn.active").forEach((btn) => btn.classList.remove("active"));
 
       if (isOpen) return;
 
@@ -531,14 +367,9 @@ function createAssistantMessageShell(
 
   wrap.appendChild(bubble);
   wrap.appendChild(actions);
-
-  if (shareMenu) {
-    wrap.appendChild(shareMenu);
-  }
-
+  if (shareMenu) wrap.appendChild(shareMenu);
   row.appendChild(wrap);
   chatBox.appendChild(row);
-
   return bubble;
 }
 
@@ -546,28 +377,23 @@ function createLessonToolsRow(chatBox, answerText = "") {
   const row = document.createElement("div");
   row.className = "lesson-tools";
 
-  const buttons = [
+  [
     { label: "Explain Again", action: "explain" },
     { label: "Give Example", action: "example" },
     { label: "Quiz Me", action: "quiz" },
-  ];
-
-  buttons.forEach((item) => {
+  ].forEach((item) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "lesson-tool-btn";
     btn.textContent = item.label;
-
     btn.addEventListener("click", (event) => {
       event.stopPropagation();
-
       if (typeof messageActionHandlers.onLessonTool === "function") {
         messageActionHandlers.onLessonTool(item.action, {
           answerText: cleanReply(answerText),
         });
       }
     });
-
     row.appendChild(btn);
   });
 
@@ -604,13 +430,8 @@ export function appendMessage(chatBox, msg, options = {}) {
     bubble.innerHTML = renderMarkdown(msg.text);
     bubble.dataset.rawText = cleanReply(msg.text);
 
-    if (msg.error) {
-      bubble.classList.add("error-state");
-    }
-
-    if (options.showLessonTools) {
-      createLessonToolsRow(chatBox, msg.text);
-    }
+    if (msg.error) bubble.classList.add("error-state");
+    if (options.showLessonTools) createLessonToolsRow(chatBox, msg.text);
 
     return bubble;
   }
@@ -624,7 +445,6 @@ export function appendMessage(chatBox, msg, options = {}) {
 
   row.appendChild(bubble);
   chatBox.appendChild(row);
-
   return bubble;
 }
 
@@ -641,30 +461,21 @@ export function updateAssistantBubble(bubble, text) {
 }
 
 export function appendTypingIndicator(chatBox) {
-  return appendMessage(chatBox, {
-    role: "assistant",
-    text: "",
-    typing: true,
-  });
+  return appendMessage(chatBox, { role: "assistant", text: "", typing: true });
 }
 
 export function removeTypingPlaceholders(chatBox) {
   if (!chatBox) return;
-
-  chatBox
-    .querySelectorAll(".chat-row.assistant .chat-bubble.typing")
-    .forEach((ph) => {
-      const row = ph.closest(".chat-row");
-      if (row) row.remove();
-    });
+  chatBox.querySelectorAll(".chat-row.assistant .chat-bubble.typing").forEach((ph) => {
+    const row = ph.closest(".chat-row");
+    if (row) row.remove();
+  });
 }
 
 export function renderCurrentSession(chatBox, session) {
   if (!chatBox) return;
-
   chatBox.innerHTML = "";
-
-  if (!session) return;
+  if (!session || !Array.isArray(session.messages)) return;
 
   session.messages.forEach((msg) => {
     appendMessage(chatBox, msg, {
@@ -678,7 +489,6 @@ export function renderCurrentSession(chatBox, session) {
 
 export function renderHistory(historyList, sessions, currentChatId, handlers = {}) {
   if (!historyList) return;
-
   historyList.innerHTML = "";
 
   const ordered = Array.isArray(sessions)
@@ -706,11 +516,8 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
     mainBtn.type = "button";
     mainBtn.className = `history-item-main ${session.id === currentChatId ? "active" : ""}`;
     mainBtn.textContent = session.title || "New Chat";
-
     mainBtn.addEventListener("click", () => {
-      if (typeof handlers.onSwitch === "function") {
-        handlers.onSwitch(session.id);
-      }
+      if (typeof handlers.onSwitch === "function") handlers.onSwitch(session.id);
     });
 
     const pinBtn = document.createElement("button");
@@ -719,12 +526,9 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
     pinBtn.title = session.pinned ? "Unpin chat" : "Pin chat";
     pinBtn.setAttribute("aria-label", session.pinned ? "Unpin chat" : "Pin chat");
     pinBtn.textContent = session.pinned ? "📌" : "📍";
-
     pinBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (typeof handlers.onPin === "function") {
-        handlers.onPin(session.id);
-      }
+      if (typeof handlers.onPin === "function") handlers.onPin(session.id);
     });
 
     const renameBtn = document.createElement("button");
@@ -733,12 +537,9 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
     renameBtn.title = "Rename chat";
     renameBtn.setAttribute("aria-label", "Rename chat");
     renameBtn.textContent = "✎";
-
     renameBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (typeof handlers.onRename === "function") {
-        handlers.onRename(session.id);
-      }
+      if (typeof handlers.onRename === "function") handlers.onRename(session.id);
     });
 
     const deleteBtn = document.createElement("button");
@@ -747,12 +548,9 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
     deleteBtn.title = "Delete chat";
     deleteBtn.setAttribute("aria-label", "Delete chat");
     deleteBtn.textContent = "🗑";
-
     deleteBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (typeof handlers.onDelete === "function") {
-        handlers.onDelete(session.id);
-      }
+      if (typeof handlers.onDelete === "function") handlers.onDelete(session.id);
     });
 
     const actions = document.createElement("div");
@@ -769,9 +567,6 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
 
 export function updateWelcomeState(welcomeScreen, session) {
   if (!welcomeScreen) return;
-
-  const hasMessages =
-    session && Array.isArray(session.messages) && session.messages.length > 0;
-
+  const hasMessages = session && Array.isArray(session.messages) && session.messages.length > 0;
   welcomeScreen.hidden = !!hasMessages;
 }
