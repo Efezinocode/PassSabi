@@ -6,15 +6,20 @@
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    padding: 18px 14px 16px;
+    padding: 0 14px 16px;
 }
 
 .welcome-screen {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 180px;
-    margin-bottom: 10px;
+    flex: 1;
+    min-height: 0;
+    transition: opacity .25s ease, transform .25s ease;
+}
+
+.welcome-screen[hidden]{
+    display:none !important;
 }
 
 .welcome-card {
@@ -46,7 +51,7 @@
     background: transparent;
     color: #ffffff;
     text-align: left;
-    padding: 8px 0 120px;
+    padding: 0 0 120px;
     scroll-padding-bottom: 120px;
     -webkit-overflow-scrolling: touch;
 }
@@ -491,14 +496,4 @@
     background: rgba(251, 146, 60, 0.08);
     padding: 14px 16px;
     border-radius: 16px;
-}
-
-.welcome-screen {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-
-.welcome-screen[hidden] {
-  opacity: 0;
-  transform: translateY(-10px);
-  pointer-events: none;
 }
