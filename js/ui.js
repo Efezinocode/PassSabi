@@ -489,6 +489,7 @@ export function renderCurrentSession(chatBox, session) {
 
 export function renderHistory(historyList, sessions, currentChatId, handlers = {}) {
   if (!historyList) return;
+
   historyList.innerHTML = "";
 
   const ordered = Array.isArray(sessions)
@@ -514,53 +515,79 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
 
     const mainBtn = document.createElement("button");
     mainBtn.type = "button";
-    mainBtn.className = `history-item-main ${session.id === currentChatId ? "active" : ""}`;
+    mainBtn.className = `history-item-main ${
+      session.id === currentChatId ? "active" : ""
+    }`;
     mainBtn.textContent = session.title || "New Chat";
+
     mainBtn.addEventListener("click", () => {
-      if (typeof handlers.onSwitch === "function") handlers.onSwitch(session.id);
+      if (typeof handlers.onSwitch === "function") {
+        handlers.onSwitch(session.id);
+      }
     });
 
-    const pinBtn = document.createElement("button");
-    pinBtn.type = "button";
-    pinBtn.className = "history-mini-btn";
-    pinBtn.title = session.pinned ? "Unpin chat" : "Pin chat";
-    pinBtn.setAttribute("aria-label", session.pinned ? "Unpin chat" : "Pin chat");
-    pinBtn.textContent = session.pinned ? "📌" : "📍";
-    pinBtn.addEventListener("click", (event) => {
+    const menuWrap = document.createElement("div");
+    menuWrap.className = "history-menu-wrap";
+
+    const menuBtn = document.createElement("button");
+    menuBtn.type = "button";
+    menuBtn.className = "history-menu-btn";
+    menuBtn.setAttribute("aria-label", "Chat options");
+    menuBtn.textContent = "⋯";
+
+    const menu = document.createElement("div");
+    menu.className = "history-menu";
+
+    const addItem = (label, action, icon) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "history-menu-item";
+      item.innerHTML = `<span class="history-menu-icon">${icon}</span><span>${label}</span>`;
+
+      item.addEventListener("click", (event) => {
+        event.stopPropagation();
+
+        if (action === "pin" && typeof handlers.onPin === "function") {
+          handlers.onPin(session.id);
+        }
+
+        if (action === "rename" && typeof handlers.onRename === "function") {
+          handlers.onRename(session.id);
+        }
+
+        if (action === "delete" && typeof handlers.onDelete === "function") {
+          handlers.onDelete(session.id);
+        }
+
+        menu.classList.remove("open");
+      });
+
+      menu.appendChild(item);
+    };
+
+    addItem(session.pinned ? "Unpin" : "Pin", "pin", "📌");
+    addItem("Rename", "rename", "✎");
+    addItem("Delete", "delete", "🗑");
+
+    menuBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (typeof handlers.onPin === "function") handlers.onPin(session.id);
+
+      document.querySelectorAll(".history-menu.open").forEach((node) => {
+        node.classList.remove("open");
+      });
+
+      menu.classList.toggle("open");
     });
 
-    const renameBtn = document.createElement("button");
-    renameBtn.type = "button";
-    renameBtn.className = "history-mini-btn";
-    renameBtn.title = "Rename chat";
-    renameBtn.setAttribute("aria-label", "Rename chat");
-    renameBtn.textContent = "✎";
-    renameBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (typeof handlers.onRename === "function") handlers.onRename(session.id);
+    row.addEventListener("click", () => {
+      menu.classList.remove("open");
     });
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "history-mini-btn danger";
-    deleteBtn.title = "Delete chat";
-    deleteBtn.setAttribute("aria-label", "Delete chat");
-    deleteBtn.textContent = "🗑";
-    deleteBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (typeof handlers.onDelete === "function") handlers.onDelete(session.id);
-    });
-
-    const actions = document.createElement("div");
-    actions.className = "history-actions";
-    actions.appendChild(pinBtn);
-    actions.appendChild(renameBtn);
-    actions.appendChild(deleteBtn);
+    menuWrap.appendChild(menuBtn);
+    menuWrap.appendChild(menu);
 
     row.appendChild(mainBtn);
-    row.appendChild(actions);
+    row.appendChild(menuWrap);
     historyList.appendChild(row);
   });
 }
