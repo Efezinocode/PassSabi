@@ -522,16 +522,20 @@ document.addEventListener("DOMContentLoaded", function () {
       const userMsg = { role: "user", text: visibleMessage, ts: Date.now() };
       session.messages.push(userMsg);
 
-      if (autoTitle && session.title === "New Chat") {
-        session.title = makeSessionTitle(visibleMessage);
-      }
+if (autoTitle && session.title === "New Chat") {
+  session.title = makeSessionTitle(visibleMessage);
+}
 
-      session.updatedAt = Date.now();
-      saveSessions(sessions);
+session.updatedAt = Date.now();
+saveSessions(sessions);
 
-      appendMessage(chatBox, userMsg);
-      refreshHistory();
-      updateWelcomeState(welcomeScreen, session);
+if (welcomeScreen) {
+  welcomeScreen.hidden = true;
+}
+
+appendMessage(chatBox, userMsg);
+refreshHistory();
+updateWelcomeState(welcomeScreen, session);
 
       if (clearInput) {
         input.value = "";
