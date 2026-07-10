@@ -492,3 +492,13 @@
     padding: 14px 16px;
     border-radius: 16px;
 }
+
+.welcome-screen {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.welcome-screen[hidden] {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
