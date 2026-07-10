@@ -594,6 +594,11 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
 
 export function updateWelcomeState(welcomeScreen, session) {
   if (!welcomeScreen) return;
-  const hasMessages = session && Array.isArray(session.messages) && session.messages.length > 0;
+
+  const hasMessages =
+    session && Array.isArray(session.messages) && session.messages.length > 0;
+
+  welcomeScreen.hidden = hasMessages;
+}
   welcomeScreen.hidden = !!hasMessages;
 }
