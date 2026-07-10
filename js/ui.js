@@ -600,5 +600,4 @@ export function updateWelcomeState(welcomeScreen, session) {
 
   welcomeScreen.hidden = hasMessages;
 }
-  welcomeScreen.hidden = !!hasMessages;
-}
+updateWelcomeState(welcomeScreen, session);
