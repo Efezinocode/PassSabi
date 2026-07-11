@@ -34,11 +34,15 @@
     <h2>🎓 PassSabi AI</h2>
 
     <div class="topbar-auth">
-      <span class="topbar-user-link" data-shell-user>Guest</span>
-      <a href="login.html" class="topbar-user-link" data-shell-login>Login</a>
-      <a href="signup.html" class="topbar-user-link" data-shell-signup>Sign Up</a>
-      <a href="profile.html" class="topbar-user-link" data-shell-profile hidden>Profile</a>
-      <a href="#" class="topbar-user-link" data-shell-logout hidden>Logout</a>
+      <div class="auth-mini-card">
+        <a href="login.html" class="auth-mini-main" data-shell-login>Log in</a>
+        <a href="signup.html" class="auth-mini-sub" data-shell-signup>No account? Sign up</a>
+
+        <div class="auth-mini-user" data-shell-user-wrap hidden>
+          <a href="profile.html" class="auth-mini-name" data-shell-profile>Guest</a>
+          <a href="#" class="auth-mini-logout" data-shell-logout hidden>Logout</a>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -63,18 +67,11 @@
       <a href="chat.html">Home</a>
       <a href="about.html">About</a>
       <a href="contact.html">Contact</a>
-      <a href="profile.html" data-shell-profile>Profile</a>
-      <a href="login.html" data-shell-login>Login</a>
-      <a href="signup.html" data-shell-signup>Sign Up</a>
-      <a href="#" data-shell-logout hidden>Logout</a>
+      <a href="profile.html">Profile</a>
     </nav>
 
     <div class="sidebar-footer">
       <p>Founded by <strong>Uzezi Great Efezino</strong></p>
-
-      <div class="sidebar-auth-links">
-        <span data-shell-user>Guest</span>
-      </div>
     </div>
   </aside>
 
