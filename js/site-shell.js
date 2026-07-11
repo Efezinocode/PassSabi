@@ -21,6 +21,7 @@ function setShellState() {
 
   document.querySelectorAll("[data-shell-logout]").forEach((node) => {
     node.hidden = !user;
+
     if (node.dataset.bound === "true") return;
     node.dataset.bound = "true";
 
