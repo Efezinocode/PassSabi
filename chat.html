@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/animations.css">
   <link rel="stylesheet" href="css/responsive.css">
 
-  <script defer src="js/auth.js"></script>
+  <script type="module" src="js/site-shell.js"></script>
 </head>
 
 <body class="chat-page">
@@ -34,9 +34,11 @@
     <h2>🎓 PassSabi AI</h2>
 
     <div class="topbar-auth">
-      <a href="profile.html" class="topbar-user-link" data-auth-label>Guest</a>
-      <a href="login.html" class="topbar-user-link" data-auth-login>Login</a>
-      <a href="#" class="topbar-user-link" data-auth-logout hidden>Logout</a>
+      <span class="topbar-user-link" data-shell-user>Guest</span>
+      <a href="login.html" class="topbar-user-link" data-shell-login>Login</a>
+      <a href="signup.html" class="topbar-user-link" data-shell-signup>Sign Up</a>
+      <a href="profile.html" class="topbar-user-link" data-shell-profile hidden>Profile</a>
+      <a href="#" class="topbar-user-link" data-shell-logout hidden>Logout</a>
     </div>
   </header>
 
@@ -61,17 +63,17 @@
       <a href="chat.html">Home</a>
       <a href="about.html">About</a>
       <a href="contact.html">Contact</a>
-      <a href="profile.html">Profile</a>
+      <a href="profile.html" data-shell-profile>Profile</a>
+      <a href="login.html" data-shell-login>Login</a>
+      <a href="signup.html" data-shell-signup>Sign Up</a>
+      <a href="#" data-shell-logout hidden>Logout</a>
     </nav>
 
     <div class="sidebar-footer">
       <p>Founded by <strong>Uzezi Great Efezino</strong></p>
 
       <div class="sidebar-auth-links">
-        <a href="profile.html" data-auth-label>Guest</a>
-        <a href="signup.html">Sign Up</a>
-        <a href="login.html" data-auth-login>Login</a>
-        <a href="#" data-auth-logout hidden>Logout</a>
+        <span data-shell-user>Guest</span>
       </div>
     </div>
   </aside>
