@@ -7,12 +7,13 @@
   <meta name="theme-color" content="#0f172a" />
   <title>Sign Up | PassSabi AI</title>
 
+  <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/auth.css" />
-  <script defer src="js/auth.js"></script>
+  <script type="module" src="js/auth.js"></script>
 </head>
 <body class="auth-page">
   <main class="auth-shell">
-    <section class="auth-card" aria-label="Sign up form">
+    <section class="auth-card">
       <header class="auth-header">
         <a class="brand" href="index.html" aria-label="Back to home">
           <div class="brand-badge">P</div>
@@ -68,7 +69,12 @@
                 autocomplete="new-password"
                 required
               />
-              <button type="button" class="input-icon-btn" data-toggle-password data-target="signupPassword">
+              <button
+                type="button"
+                class="input-icon-btn"
+                data-toggle-password
+                data-target="signupPassword"
+              >
                 Show
               </button>
             </div>
@@ -86,7 +92,12 @@
                 autocomplete="new-password"
                 required
               />
-              <button type="button" class="input-icon-btn" data-toggle-password data-target="confirmPassword">
+              <button
+                type="button"
+                class="input-icon-btn"
+                data-toggle-password
+                data-target="confirmPassword"
+              >
                 Show
               </button>
             </div>
