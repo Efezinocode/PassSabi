@@ -11,6 +11,8 @@ import {
 
 import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
 
+import { requireAuth, renderAuthHeader } from "./auth.js";
+
 import {
   appendMessage,
   appendTypingIndicator,
