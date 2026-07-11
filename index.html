@@ -10,10 +10,10 @@
 
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/home.css" />
-  <script defer src="js/auth.js"></script>
+  <link rel="stylesheet" href="css/auth-panel.css" />
+
   <script type="module" src="js/site-shell.js"></script>
-  <link rel="stylesheet" href="css/auth-panel.css">
-<script type="module" src="js/auth-panel.js"></script>
+  <script type="module" src="js/auth-panel.js"></script>
 </head>
 <body class="home-page">
   <main class="home-wrap">
@@ -28,8 +28,8 @@
 
       <nav class="home-actions" aria-label="Primary">
         <a class="btn-outline" href="chat.html">Start Free Chat</a>
-        <a class="btn-outline" href="login.html" data-shell-login>Login</a>
-        <a class="btn" href="signup.html" data-shell-signup>Sign Up</a>
+        <a class="btn-outline" href="#" data-open-auth="login">Login</a>
+        <a class="btn" href="#" data-open-auth="signup">Sign Up</a>
         <a class="btn-outline" href="profile.html" data-shell-profile hidden>Profile</a>
         <a class="btn-outline" href="#" data-shell-logout hidden>Logout</a>
       </nav>
@@ -46,8 +46,8 @@
 
         <div class="hero-cta">
           <a class="btn" href="chat.html">Start Free Chat</a>
-          <a class="btn-outline" href="signup.html">Create Account</a>
-          <a class="btn-outline" href="login.html">Login</a>
+          <a class="btn-outline" href="#" data-open-auth="login">Login</a>
+          <a class="btn-outline" href="#" data-open-auth="signup">Create Account</a>
         </div>
 
         <div class="stats">
@@ -96,8 +96,49 @@
     </section>
 
     <p class="footer-note">
-      PassSabi is built to start free, then let users sign up when they want saved chats and more features.
+      PassSabi starts free, then lets users sign up when they want saved chats and more features.
     </p>
   </main>
+
+  <section id="authPanel" class="auth-panel" hidden>
+    <div class="auth-panel-inner">
+      <div class="auth-panel-drag" aria-hidden="true"></div>
+
+      <button
+        type="button"
+        data-auth-close
+        aria-label="Close"
+        style="position:absolute;right:14px;top:14px;width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.08);color:#fff;font-size:1.2rem;cursor:pointer;"
+      >
+        ×
+      </button>
+
+      <p style="margin:0 0 10px;text-align:center;color:#cbd5e1;">PassSabi AI</p>
+      <h2 id="authPanelTitle" class="auth-panel-title">Log in or sign up</h2>
+      <p id="authPanelSubtitle" class="auth-panel-subtitle">
+        You'll get smarter responses and can upload files, images, and more.
+      </p>
+
+      <div class="auth-provider-grid">
+        <button type="button" class="auth-provider-btn" data-auth-provider="google">Continue with Google</button>
+        <button type="button" class="auth-provider-btn" data-auth-provider="apple">Continue with Apple</button>
+        <button type="button" class="auth-provider-btn" data-auth-provider="phone">Continue with phone</button>
+        <button type="button" class="auth-provider-btn" data-auth-provider="github">Continue with GitHub</button>
+      </div>
+
+      <div class="auth-divider">OR</div>
+
+      <div class="auth-field">
+        <label for="authPanelEmail">Email address</label>
+        <input id="authPanelEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+
+      <button id="authPanelContinue" type="button" class="auth-provider-btn primary">Continue</button>
+
+      <p id="authPanelFooter" class="auth-panel-footer">
+        No account? <a href="signup.html">Sign up</a>
+      </p>
+    </div>
+  </section>
 </body>
-</html>
+  </html>
