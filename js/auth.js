@@ -1,13 +1,8 @@
-export function currentUser() { ... }
-export function requireAuth(redirectTo = "login.html") { ... }
-export function clearSession() { ... }
-export function renderAuthHeader() { ... }
-
 (function () {
   const USERS_KEY = "passsabi_users_v1";
   const SESSION_KEY = "passsabi_session_v1";
   const RESET_KEY = "passsabi_reset_v1";
-
+ 
   function safeJsonParse(value, fallback) {
     try {
       return JSON.parse(value);
