@@ -7,6 +7,10 @@ function setShellState() {
     node.textContent = user ? (user.fullName || user.email) : "Guest";
   });
 
+  document.querySelectorAll("[data-shell-user-wrap]").forEach((node) => {
+    node.hidden = !user;
+  });
+
   document.querySelectorAll("[data-shell-login]").forEach((node) => {
     node.hidden = !!user;
   });
@@ -17,6 +21,10 @@ function setShellState() {
 
   document.querySelectorAll("[data-shell-profile]").forEach((node) => {
     node.hidden = !user;
+    if (user && node.tagName === "A") {
+      node.textContent = user.fullName || user.email || "Profile";
+      node.href = "profile.html";
+    }
   });
 
   document.querySelectorAll("[data-shell-logout]").forEach((node) => {
