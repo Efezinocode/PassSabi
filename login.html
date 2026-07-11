@@ -7,12 +7,13 @@
   <meta name="theme-color" content="#0f172a" />
   <title>Login | PassSabi AI</title>
 
+  <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/auth.css" />
-  <script defer src="js/auth.js"></script>
+  <script type="module" src="js/auth.js"></script>
 </head>
 <body class="auth-page">
   <main class="auth-shell">
-    <section class="auth-card" aria-label="Login form">
+    <section class="auth-card">
       <header class="auth-header">
         <a class="brand" href="index.html" aria-label="Back to home">
           <div class="brand-badge">P</div>
@@ -48,7 +49,6 @@
               <label for="loginPassword">Password</label>
               <a class="helper-link" href="forgot-password.html">Forgot password?</a>
             </div>
-
             <div class="input-wrap">
               <input
                 id="loginPassword"
@@ -57,7 +57,12 @@
                 autocomplete="current-password"
                 required
               />
-              <button type="button" class="input-icon-btn" data-toggle-password data-target="loginPassword">
+              <button
+                type="button"
+                class="input-icon-btn"
+                data-toggle-password
+                data-target="loginPassword"
+              >
                 Show
               </button>
             </div>
