@@ -1,1 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Your PassSabi AI profile." />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Profile | PassSabi AI</title>
 
+  <link rel="stylesheet" href="css/auth.css" />
+  <script defer src="js/auth.js"></script>
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-card profile-card" aria-label="Profile page">
+      <header class="auth-header">
+        <a class="brand" href="index.html" aria-label="Back to home">
+          <div class="brand-badge" id="currentUserBadge">P</div>
+          <div class="brand-text">
+            <strong id="currentUserName">PassSabi User</strong>
+            <span id="currentUserEmail">Loading profile...</span>
+          </div>
+        </a>
+
+        <h1 class="auth-title">Your profile</h1>
+        <p class="auth-subtitle">Manage your account details and keep your learning space organized.</p>
+      </header>
+
+      <div class="auth-body">
+        <div class="profile-grid">
+          <div class="profile-panel">
+            <div class="profile-item">
+              <span>Full name</span>
+              <strong id="profileName">—</strong>
+            </div>
+            <div class="profile-item">
+              <span>Email</span>
+              <strong id="profileEmail">—</strong>
+            </div>
+            <div class="profile-item">
+              <span>Status</span>
+              <strong id="profileStatus">—</strong>
+            </div>
+            <div class="profile-item">
+              <span>Joined</span>
+              <strong id="profileJoined">—</strong>
+            </div>
+          </div>
+
+          <div class="profile-panel">
+            <h2 style="margin: 0 0 10px; font-size: 1.05rem;">Account actions</h2>
+            <p class="small" style="margin-top: 0;">
+              This page is ready for future profile editing, email verification, and premium settings.
+            </p>
+
+            <button id="logoutBtn" class="auth-btn" type="button" style="margin-top: 18px;">
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-footer">
+        <a href="chat.html">Back to chat</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
