@@ -1,1 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Create your PassSabi AI account." />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Sign Up | PassSabi AI</title>
 
+  <link rel="stylesheet" href="css/auth.css" />
+  <script defer src="js/auth.js"></script>
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-card" aria-label="Sign up form">
+      <header class="auth-header">
+        <a class="brand" href="index.html" aria-label="Back to home">
+          <div class="brand-badge">P</div>
+          <div class="brand-text">
+            <strong>PassSabi AI</strong>
+            <span>Create your student account</span>
+          </div>
+        </a>
+
+        <h1 class="auth-title">Create your account</h1>
+        <p class="auth-subtitle">Join PassSabi to save progress, manage chats, and learn faster.</p>
+      </header>
+
+      <div class="auth-body">
+        <div id="signupNotice" class="notice" aria-live="polite"></div>
+
+        <form id="signupForm" novalidate>
+          <div class="form-group">
+            <div class="label-row">
+              <label for="fullName">Full name</label>
+            </div>
+            <input
+              id="fullName"
+              type="text"
+              placeholder="Enter your full name"
+              autocomplete="name"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <div class="label-row">
+              <label for="signupEmail">Email address</label>
+            </div>
+            <input
+              id="signupEmail"
+              type="email"
+              placeholder="you@example.com"
+              autocomplete="email"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <div class="label-row">
+              <label for="signupPassword">Password</label>
+            </div>
+            <div class="input-wrap">
+              <input
+                id="signupPassword"
+                type="password"
+                placeholder="Create a password"
+                autocomplete="new-password"
+                required
+              />
+              <button type="button" class="input-icon-btn" data-toggle-password data-target="signupPassword">
+                Show
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="label-row">
+              <label for="confirmPassword">Confirm password</label>
+            </div>
+            <div class="input-wrap">
+              <input
+                id="confirmPassword"
+                type="password"
+                placeholder="Repeat your password"
+                autocomplete="new-password"
+                required
+              />
+              <button type="button" class="input-icon-btn" data-toggle-password data-target="confirmPassword">
+                Show
+              </button>
+            </div>
+          </div>
+
+          <div class="row" style="margin-bottom: 16px;">
+            <label class="checkbox">
+              <input id="terms" type="checkbox" required />
+              <span>I agree to the terms and privacy policy</span>
+            </label>
+          </div>
+
+          <button id="signupBtn" class="auth-btn" type="submit">Create account</button>
+        </form>
+      </div>
+
+      <div class="auth-footer">
+        Already have an account? <a href="login.html">Login</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
