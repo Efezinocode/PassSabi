@@ -11,8 +11,6 @@ import {
 
 import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
 
-import { requireAuth, renderAuthHeader } from "./auth.js";
-
 import {
   appendMessage,
   appendTypingIndicator,
@@ -46,9 +44,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const chatSearch = document.getElementById("chatSearch");
   const historyList = document.getElementById("chat-history");
   const welcomeScreen = document.getElementById("welcome-screen");
-  const user = window.PassSabiAuth?.currentUser?.() || null;
-const isGuest = !user;
-renderAuthHeader();
 
   const DEFAULT_PLACEHOLDER = "Type your question here...";
 
