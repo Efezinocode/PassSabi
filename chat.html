@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#0f172a">
   <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations, and learning support.">
+  <meta name="color-scheme" content="dark">
 
   <title>PassSabi AI Chat | Your Personal AI Teacher</title>
 
@@ -13,6 +14,8 @@
   <link rel="stylesheet" href="css/chat.css">
   <link rel="stylesheet" href="css/animations.css">
   <link rel="stylesheet" href="css/responsive.css">
+
+  <script defer src="js/auth.js"></script>
 </head>
 
 <body class="chat-page">
@@ -29,6 +32,12 @@
     </button>
 
     <h2>🎓 PassSabi AI</h2>
+
+    <div class="topbar-auth">
+      <a href="profile.html" class="topbar-user-link" data-auth-label>Guest</a>
+      <a href="login.html" class="topbar-user-link" data-auth-login>Login</a>
+      <a href="#" class="topbar-user-link" data-auth-logout hidden>Logout</a>
+    </div>
   </header>
 
   <div id="backdrop" class="backdrop" aria-hidden="true"></div>
@@ -52,10 +61,18 @@
       <a href="chat.html">Home</a>
       <a href="about.html">About</a>
       <a href="contact.html">Contact</a>
+      <a href="profile.html">Profile</a>
     </nav>
 
     <div class="sidebar-footer">
-      Founded by <strong>Uzezi Great Efezino</strong>
+      <p>Founded by <strong>Uzezi Great Efezino</strong></p>
+
+      <div class="sidebar-auth-links">
+        <a href="profile.html" data-auth-label>Guest</a>
+        <a href="signup.html">Sign Up</a>
+        <a href="login.html" data-auth-login>Login</a>
+        <a href="#" data-auth-logout hidden>Logout</a>
+      </div>
     </div>
   </aside>
 
