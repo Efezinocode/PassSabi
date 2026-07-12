@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations, and learning support." />
+  <meta name="color-scheme" content="dark" />
+
+  <title>PassSabi AI Chat | User</title>
+
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/sidebar.css" />
+  <link rel="stylesheet" href="css/chat.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+</head>
+<body class="chat-page">
+
+  <header class="chat-topbar">
+    <button
+      id="menuBtn"
+      type="button"
+      class="menu-button"
+      aria-label="Open menu"
+      aria-expanded="false"
+      aria-controls="sidebar">
+      ☰
+    </button>
+
+    <h2>🎓 PassSabi AI</h2>
+
+    <div class="topbar-auth"></div>
+  </header>
+
+  <div id="backdrop" class="backdrop" aria-hidden="true"></div>
+
+  <aside id="sidebar" class="sidebar" aria-hidden="true">
+    <div class="sidebar-header">
+      <h3>PassSabi AI</h3>
+      <p>Your Personal AI Teacher</p>
+    </div>
+
+    <button id="newChatBtn" type="button" class="sidebar-action">
+      + New Chat
+    </button>
+
+    <section class="sidebar-section">
+      <h4>Chat History</h4>
+      <div id="chat-history" class="history-list"></div>
+    </section>
+
+    <nav class="sidebar-nav" aria-label="Sidebar navigation">
+      <a href="user-chat.html">Home</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a href="profile.html" data-shell-userlink>Profile</a>
+      <a href="#" data-shell-logout>Logout</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <p>Founded by <strong>Uzezi Great Efezino</strong></p>
+    </div>
+  </aside>
+
+  <main class="chat-container">
+    <section id="welcome-screen" class="welcome-screen" hidden>
+      <div class="welcome-card">
+        <h1>PassSabi AI</h1>
+        <p>How can I help you today?</p>
+      </div>
+    </section>
+
+    <div
+      id="chat-box"
+      role="log"
+      aria-live="polite"
+      aria-relevant="additions text"
+      aria-label="Chat messages">
+    </div>
+
+    <div class="chat-footer">
+      <form id="chat-form" class="chat-input-wrap" autocomplete="off">
+        <textarea
+          id="userInput"
+          placeholder="Type your question here..."
+          required
+          spellcheck="false"
+          autocomplete="off"
+          rows="1"
+          enterkeyhint="send"></textarea>
+
+        <button id="sendBtn" type="submit" aria-label="Send message" title="Send message">
+          ➤
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <script type="module" src="js/user-shell.js"></script>
+  <script type="module" src="js/chat.js"></script>
+</body>
+</html>
