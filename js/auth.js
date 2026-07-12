@@ -251,9 +251,9 @@ function bindLoginForm() {
     if (btn) btn.disabled = true;
 
     const next = params.get("next") || "user-chat.html";
-    window.setTimeout(() => {
-      window.location.href = next;
-    }, 700);
+window.setTimeout(() => {
+  window.location.replace(next);
+}, 700);
   });
 }
 
