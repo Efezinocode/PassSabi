@@ -12,6 +12,76 @@
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/animations.css">
   <link rel="stylesheet" href="css/responsive.css">
+
+  <style>
+    .about-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 24px 0 10px;
+    }
+
+    .about-card {
+      padding: 18px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+      text-align: left;
+    }
+
+    .about-card h3 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+      color: #f8fafc;
+    }
+
+    .about-card p {
+      margin: 0;
+      color: #cbd5e1;
+      line-height: 1.7;
+    }
+
+    .about-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    .about-actions a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 18px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    .about-actions .primary {
+      background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .about-actions .secondary {
+      background: rgba(255, 255, 255, 0.04);
+      color: #e2e8f0;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      text-decoration: none;
+    }
+
+    .about-actions a:hover {
+      text-decoration: none;
+      transform: translateY(-1px);
+    }
+
+    @media (max-width: 900px) {
+      .about-cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
   <header>
@@ -20,6 +90,7 @@
 
       <div class="nav-links">
         <a href="index.html">Home</a>
+        <a href="guest-chat.html">Start Free Chat</a>
       </div>
     </nav>
   </header>
@@ -40,7 +111,29 @@
     <p class="description">
       PassSabi AI was founded by <strong>Uzezi Great Efezino</strong>.
     </p>
-  </main>
 
+    <section class="about-cards" aria-label="PassSabi features">
+      <div class="about-card">
+        <h3>Free access</h3>
+        <p>Students can start chatting immediately without creating an account first.</p>
+      </div>
+
+      <div class="about-card">
+        <h3>Study support</h3>
+        <p>PassSabi helps with homework, quizzes, explanations, and exam preparation.</p>
+      </div>
+
+      <div class="about-card">
+        <h3>Account upgrade</h3>
+        <p>Users can log in later to save chats, manage their profile, and unlock more features.</p>
+      </div>
+    </section>
+
+    <div class="about-actions">
+      <a class="primary" href="guest-chat.html">Start Free Chat</a>
+      <a class="secondary" href="login.html">Login</a>
+      <a class="secondary" href="signup.html">Sign Up</a>
+    </div>
+  </main>
 </body>
 </html>
