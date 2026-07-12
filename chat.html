@@ -14,10 +14,8 @@
   <link rel="stylesheet" href="css/chat.css">
   <link rel="stylesheet" href="css/animations.css">
   <link rel="stylesheet" href="css/responsive.css">
-  <link rel="stylesheet" href="css/auth-panel.css">
 
   <script type="module" src="js/site-shell.js"></script>
-  <script type="module" src="js/auth-panel.js"></script>
 </head>
 
 <body class="chat-page">
@@ -37,11 +35,11 @@
 
     <div class="topbar-auth">
       <div class="auth-mini-card">
-        <a href="#" class="auth-mini-main" data-open-auth="login">Log in</a>
-        <a href="#" class="auth-mini-sub" data-open-auth="signup">No account? Sign up</a>
+        <a href="login.html" class="auth-mini-main" data-shell-login>Log in</a>
+        <a href="signup.html" class="auth-mini-sub" data-shell-signup>No account? Sign up</a>
 
         <div class="auth-mini-user" data-shell-user-wrap hidden>
-          <a href="profile.html" class="auth-mini-name" data-shell-profile>Profile</a>
+          <a href="profile.html" class="auth-mini-name" data-shell-user data-shell-profile>Profile</a>
           <a href="#" class="auth-mini-logout" data-shell-logout hidden>Logout</a>
         </div>
       </div>
@@ -69,7 +67,10 @@
       <a href="chat.html">Home</a>
       <a href="about.html">About</a>
       <a href="contact.html">Contact</a>
-      <a href="profile.html">Profile</a>
+      <a href="profile.html" data-shell-profile>Profile</a>
+      <a href="login.html" data-shell-login>Login</a>
+      <a href="signup.html" data-shell-signup>Sign Up</a>
+      <a href="#" data-shell-logout hidden>Logout</a>
     </nav>
 
     <div class="sidebar-footer">
@@ -110,47 +111,6 @@
       </form>
     </div>
   </main>
-
-  <section id="authPanel" class="auth-panel" hidden>
-    <div class="auth-panel-inner">
-      <div class="auth-panel-drag" aria-hidden="true"></div>
-
-      <button
-        type="button"
-        data-auth-close
-        aria-label="Close"
-        style="position:absolute;right:14px;top:14px;width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.08);color:#fff;font-size:1.2rem;cursor:pointer;"
-      >
-        ×
-      </button>
-
-      <p style="margin:0 0 10px;text-align:center;color:#cbd5e1;">PassSabi AI</p>
-      <h2 id="authPanelTitle" class="auth-panel-title">Log in or sign up</h2>
-      <p id="authPanelSubtitle" class="auth-panel-subtitle">
-        You'll get smarter responses and can upload files, images, and more.
-      </p>
-
-      <div class="auth-provider-grid">
-        <button type="button" class="auth-provider-btn" data-auth-provider="google">Continue with Google</button>
-        <button type="button" class="auth-provider-btn" data-auth-provider="apple">Continue with Apple</button>
-        <button type="button" class="auth-provider-btn" data-auth-provider="phone">Continue with phone</button>
-        <button type="button" class="auth-provider-btn" data-auth-provider="github">Continue with GitHub</button>
-      </div>
-
-      <div class="auth-divider">OR</div>
-
-      <div class="auth-field">
-        <label for="authPanelEmail">Email address</label>
-        <input id="authPanelEmail" type="email" placeholder="you@example.com" autocomplete="email" />
-      </div>
-
-      <button id="authPanelContinue" type="button" class="auth-provider-btn primary">Continue</button>
-
-      <p id="authPanelFooter" class="auth-panel-footer">
-        No account? <a href="signup.html">Sign up</a>
-      </p>
-    </div>
-  </section>
 
   <script type="module" src="js/chat.js"></script>
 </body>
