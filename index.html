@@ -10,10 +10,6 @@
 
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/home.css" />
-  <link rel="stylesheet" href="css/auth-panel.css" />
-
-  <script type="module" src="js/site-shell.js"></script>
-  <script type="module" src="js/auth-panel.js"></script>
 </head>
 <body class="home-page">
   <main class="home-wrap">
@@ -32,44 +28,13 @@
         <p class="kicker">Free AI learning for students</p>
         <h1>Learn faster with PassSabi AI.</h1>
         <p>
-          Ask questions, get explanations, study for WAEC, NECO, JAMB, GCE, and NABTEB,
-          and continue your learning journey with a clean, fast, mobile-friendly website.
+          Ask questions, get explanations, and study for WAEC, NECO, JAMB, GCE, and NABTEB.
+          Start free chat immediately, then log in later when you want saved chats and more features.
         </p>
 
         <div class="hero-cta">
-          <a class="btn" href="chat.html">Start Free Chat</a>
-          <a class="btn-outline" href="#" data-open-auth="login">Login</a>
-          <a class="btn-outline" href="#" data-open-auth="signup">Create Account</a>
-        </div>
-
-        <div class="stats">
-          <div class="stat">
-            <strong>Free access</strong>
-            <span>Chat without signing up first</span>
-          </div>
-          <div class="stat">
-            <strong>Study support</strong>
-            <span>Questions, quizzes, and exam help</span>
-          </div>
-          <div class="stat">
-            <strong>Account upgrade</strong>
-            <span>Save chats and sync later</span>
-          </div>
-        </div>
-
-        <div class="feature-grid">
-          <div class="feature">
-            <h3>Homework help</h3>
-            <p>Get step-by-step answers that are easy to understand.</p>
-          </div>
-          <div class="feature">
-            <h3>Exam prep</h3>
-            <p>Practice questions for major Nigerian exams.</p>
-          </div>
-          <div class="feature">
-            <h3>Clean experience</h3>
-            <p>Fast, dark, mobile-first design that feels professional.</p>
-          </div>
+          <a class="btn" href="guest-chat.html">Start Free Chat</a>
+          <a class="btn-outline" href="about.html">About</a>
         </div>
       </div>
 
@@ -88,49 +53,8 @@
     </section>
 
     <p class="footer-note">
-      PassSabi starts free, then lets users sign up when they want saved chats and more features.
+      PassSabi starts free. Log in later when you want to save chats and sync your account.
     </p>
   </main>
-
-  <section id="authPanel" class="auth-panel" hidden>
-    <div class="auth-panel-inner">
-      <div class="auth-panel-drag" aria-hidden="true"></div>
-
-      <button
-        type="button"
-        data-auth-close
-        aria-label="Close"
-        style="position:absolute;right:14px;top:14px;width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.08);color:#fff;font-size:1.2rem;cursor:pointer;"
-      >
-        ×
-      </button>
-
-      <p style="margin:0 0 10px;text-align:center;color:#cbd5e1;">PassSabi AI</p>
-      <h2 id="authPanelTitle" class="auth-panel-title">Log in or sign up</h2>
-      <p id="authPanelSubtitle" class="auth-panel-subtitle">
-        You'll get smarter responses and can upload files, images, and more.
-      </p>
-
-      <div class="auth-provider-grid">
-        <button type="button" class="auth-provider-btn" data-auth-provider="google">Continue with Google</button>
-        <button type="button" class="auth-provider-btn" data-auth-provider="apple">Continue with Apple</button>
-        <button type="button" class="auth-provider-btn" data-auth-provider="phone">Continue with phone</button>
-        <button type="button" class="auth-provider-btn" data-auth-provider="github">Continue with GitHub</button>
-      </div>
-
-      <div class="auth-divider">OR</div>
-
-      <div class="auth-field">
-        <label for="authPanelEmail">Email address</label>
-        <input id="authPanelEmail" type="email" placeholder="you@example.com" autocomplete="email" />
-      </div>
-
-      <button id="authPanelContinue" type="button" class="auth-provider-btn primary">Continue</button>
-
-      <p id="authPanelFooter" class="auth-panel-footer">
-        No account? <a href="signup.html">Sign up</a>
-      </p>
-    </div>
-  </section>
 </body>
-  </html>
+</html>
