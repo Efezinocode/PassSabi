@@ -504,7 +504,6 @@
   z-index: 35;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
   background: rgba(8, 17, 31, 0.92);
@@ -520,10 +519,10 @@
 }
 
 .topbar-auth {
+  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  margin-left: auto;
 }
 
 .auth-mini-card {
