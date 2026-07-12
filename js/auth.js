@@ -78,7 +78,7 @@ export function currentUser() {
 export function requireAuth(redirectTo = "login.html") {
   const user = currentUser();
   if (!user) {
-    window.location.href = redirectTo;
+    window.location.replace(redirectTo);
     return null;
   }
   return user;
@@ -101,13 +101,14 @@ export function renderAuthHeader() {
 
   document.querySelectorAll("[data-auth-logout]").forEach((node) => {
     node.hidden = !user;
+
     if (node.dataset.bound === "true") return;
     node.dataset.bound = "true";
 
     node.addEventListener("click", (e) => {
       e.preventDefault();
       clearSession();
-      window.location.href = "login.html?message=You have been logged out.";
+      window.location.replace("login.html?message=You have been logged out.");
     });
   });
 }
@@ -218,7 +219,7 @@ function bindPasswordToggleButtons() {
 function bindLoginForm() {
   const form = qs("loginForm");
   if (!form || form.dataset.bound === "true") return;
-  form.dataset.bound = "true";
+  form.dataset.bound = true;
 
   const notice = qs("loginNotice");
   const btn = qs("loginBtn");
@@ -251,16 +252,16 @@ function bindLoginForm() {
     if (btn) btn.disabled = true;
 
     const next = params.get("next") || "user-chat.html";
-window.setTimeout(() => {
-  window.location.replace(next);
-}, 700);
+    window.setTimeout(() => {
+      window.location.replace(next);
+    }, 700);
   });
 }
 
 function bindSignupForm() {
   const form = qs("signupForm");
   if (!form || form.dataset.bound === "true") return;
-  form.dataset.bound = "true";
+  form.dataset.bound = true;
 
   const notice = qs("signupNotice");
   const btn = qs("signupBtn");
@@ -286,9 +287,9 @@ function bindSignupForm() {
     if (btn) btn.disabled = true;
 
     window.setTimeout(() => {
-      window.location.href = `login.html?message=${encodeURIComponent(
-        "Account created successfully. Please log in."
-      )}`;
+      window.location.replace(
+        `login.html?message=${encodeURIComponent("Account created successfully. Please log in.")}`
+      );
     }, 900);
   });
 }
@@ -296,7 +297,7 @@ function bindSignupForm() {
 function bindForgotPasswordForm() {
   const form = qs("forgotPasswordForm");
   if (!form || form.dataset.bound === "true") return;
-  form.dataset.bound = "true";
+  form.dataset.bound = true;
 
   const notice = qs("forgotNotice");
   const btn = qs("forgotBtn");
@@ -345,7 +346,7 @@ function bindProfilePage() {
     logoutBtn.dataset.bound = "true";
     logoutBtn.addEventListener("click", () => {
       clearSession();
-      window.location.href = "login.html?message=You have been logged out.";
+      window.location.replace("login.html?message=You have been logged out.");
     });
   }
 }
@@ -361,6 +362,13 @@ window.PassSabiAuth = {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  const loggedInUser = currentUser();
+
+  if (loggedInUser && window.location.pathname.includes("login.html")) {
+    window.location.replace("user-chat.html");
+    return;
+  }
+
   bindPasswordToggleButtons();
   bindLoginForm();
   bindSignupForm();
