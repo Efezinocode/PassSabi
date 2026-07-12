@@ -498,26 +498,6 @@
     border-radius: 16px;
 }
 
-.chat-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 35;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: rgba(8, 17, 31, 0.92);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  backdrop-filter: blur(18px);
-}
-
-.chat-topbar h2 {
-  margin: 0;
-  font-size: 1.05rem;
-  color: #f8fafc;
-  letter-spacing: -0.02em;
-}
-
 .topbar-auth {
   margin-left: auto;
   display: flex;
@@ -525,122 +505,35 @@
   justify-content: flex-end;
 }
 
-.auth-mini-card {
-  min-width: 150px;
-  padding: 8px 10px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(16px);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.auth-mini-main {
-  display: block;
-  width: 100%;
-  text-align: center;
-  padding: 9px 12px;
+.topbar-login-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  height: 40px;
+  padding: 0 16px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  color: #f8fafc;
+  font-size: 0.92rem;
   font-weight: 700;
   text-decoration: none;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
 }
 
-.auth-mini-main:hover {
+.topbar-login-link:hover {
+  background: rgba(255, 255, 255, 0.12);
   text-decoration: none;
-  transform: translateY(-1px);
-}
-
-.auth-mini-sub {
-  display: block;
-  text-align: center;
-  font-size: 0.84rem;
-  color: #cbd5e1;
-  text-decoration: none;
-  padding: 3px 6px 2px;
-}
-
-.auth-mini-sub:hover {
-  text-decoration: underline;
-}
-
-.auth-mini-user {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.auth-mini-name,
-.auth-mini-logout {
-  display: block;
-  text-align: center;
-  padding: 8px 10px;
-  border-radius: 14px;
-  text-decoration: none;
-  background: rgba(255, 255, 255, 0.05);
-  color: #e2e8f0;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-}
-
-.auth-mini-name:hover,
-.auth-mini-logout:hover {
-  text-decoration: none;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.sidebar-nav {
-  display: grid;
-  gap: 8px;
-  padding: 0 12px 12px;
-}
-
-.sidebar-nav a {
-  display: block;
-  padding: 12px 14px;
-  border-radius: 14px;
-  color: #e2e8f0;
-  text-decoration: none;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-}
-
-.sidebar-nav a:hover {
-  background: rgba(255, 255, 255, 0.08);
-  text-decoration: none;
-}
-
-.sidebar-footer p {
-  margin: 0;
-  color: #cbd5e1;
-  line-height: 1.5;
 }
 
 @media (max-width: 640px) {
-  .chat-topbar {
-    padding: 12px;
-    gap: 10px;
-  }
-
-  .auth-mini-card {
-    min-width: 124px;
-    padding: 7px 8px;
-    border-radius: 16px;
-  }
-
-  .auth-mini-main {
-    padding: 8px 10px;
-    font-size: 0.9rem;
-  }
-
-  .auth-mini-sub {
-    font-size: 0.8rem;
-  }
-
-  .chat-topbar h2 {
-    font-size: 0.98rem;
+  .topbar-login-link {
+    min-width: 74px;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 0.88rem;
+    border-radius: 12px;
   }
 }
