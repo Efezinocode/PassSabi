@@ -4,7 +4,7 @@ function setShellState() {
   const user = currentUser();
 
   document.querySelectorAll("[data-shell-user]").forEach((node) => {
-    node.textContent = user ? (user.fullName || user.email || "Profile") : "Guest";
+    node.textContent = user ? (user.fullName || user.email || "Profile") : "Profile";
   });
 
   document.querySelectorAll("[data-shell-user-wrap]").forEach((node) => {
