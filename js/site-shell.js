@@ -1,44 +1,30 @@
-import { currentUser, clearSession } from "./auth.js";
+// js/site-shell.js
 
-function setShellState() {
-  const user = currentUser();
+document.addEventListener("DOMContentLoaded", () => {
+  const loginLink = document.querySelector(".topbar-login-link");
 
-  document.querySelectorAll("[data-shell-user]").forEach((node) => {
-    node.textContent = user ? (user.fullName || user.email || "Profile") : "Profile";
-  });
+  // Get logged in user
+  const user = JSON.parse(localStorage.getItem("passsabiUser"));
 
-  document.querySelectorAll("[data-shell-user-wrap]").forEach((node) => {
-    node.hidden = !user;
-  });
-
-  document.querySelectorAll("[data-shell-login]").forEach((node) => {
-    node.hidden = !!user;
-  });
-
-  document.querySelectorAll("[data-shell-signup]").forEach((node) => {
-    node.hidden = !!user;
-  });
-
-  document.querySelectorAll("[data-shell-profile]").forEach((node) => {
-    node.hidden = !user;
-    if (user && node.tagName === "A") {
-      node.href = "profile.html";
-      node.textContent = user.fullName || user.email || "Profile";
+  if (loginLink) {
+    if (user) {
+      // Logged in
+      loginLink.textContent = user.name || "Profile";
+      loginLink.href = "profile.html";
+    } else {
+      // Guest
+      loginLink.textContent = "Login";
+      loginLink.href = "login.html";
     }
-  });
+  }
 
-  document.querySelectorAll("[data-shell-logout]").forEach((node) => {
-    node.hidden = !user;
+  // Logout button (only if one exists)
+  const logoutBtn = document.getElementById("logoutBtn");
 
-    if (node.dataset.bound === "true") return;
-    node.dataset.bound = "true";
-
-    node.addEventListener("click", (e) => {
-      e.preventDefault();
-      clearSession();
-      window.location.href = "index.html?message=You have been logged out.";
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem("passsabiUser");
+      window.location.href = "login.html";
     });
-  });
-}
-
-document.addEventListener("DOMContentLoaded", setShellState);
+  }
+});
