@@ -1,23 +1,19 @@
-// js/user-shell.js
 import { currentUser, clearSession } from "./auth.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const user = currentUser();
 
-  // If no signed-in user, send them back to the guest chat page
   if (!user) {
-    window.location.href = "guest-chat.html";
+    window.location.replace("guest-chat.html");
     return;
   }
 
-  // Sidebar profile link
   document.querySelectorAll("[data-shell-userlink]").forEach((link) => {
     link.hidden = false;
     link.textContent = user.fullName || user.email || "Profile";
     link.href = "profile.html";
   });
 
-  // Logout links
   document.querySelectorAll("[data-shell-logout]").forEach((link) => {
     link.hidden = false;
 
@@ -27,7 +23,13 @@ document.addEventListener("DOMContentLoaded", () => {
     link.addEventListener("click", (e) => {
       e.preventDefault();
       clearSession();
-      window.location.href = "guest-chat.html";
+      window.location.replace("guest-chat.html");
     });
+  });
+
+  // Prevent Android back button from leaving the logged-in chat page
+  history.pushState(null, "", window.location.href);
+  window.addEventListener("popstate", () => {
+    history.pushState(null, "", window.location.href);
   });
 });
