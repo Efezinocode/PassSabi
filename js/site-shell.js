@@ -4,7 +4,7 @@ function setShellState() {
   const user = currentUser();
 
   document.querySelectorAll("[data-shell-user]").forEach((node) => {
-    node.textContent = user ? (user.fullName || user.email) : "Guest";
+    node.textContent = user ? (user.fullName || user.email || "Profile") : "Guest";
   });
 
   document.querySelectorAll("[data-shell-user-wrap]").forEach((node) => {
@@ -22,8 +22,8 @@ function setShellState() {
   document.querySelectorAll("[data-shell-profile]").forEach((node) => {
     node.hidden = !user;
     if (user && node.tagName === "A") {
-      node.textContent = user.fullName || user.email || "Profile";
       node.href = "profile.html";
+      node.textContent = user.fullName || user.email || "Profile";
     }
   });
 
