@@ -1,3 +1,4 @@
+// js/user-shell.js
 import { currentUser, clearSession } from "./auth.js";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -27,7 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Prevent Android back button from leaving the logged-in chat page
   history.pushState(null, "", window.location.href);
   window.addEventListener("popstate", () => {
     history.pushState(null, "", window.location.href);
