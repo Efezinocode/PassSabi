@@ -250,7 +250,7 @@ function bindLoginForm() {
     setNotice(notice, "Login successful. Redirecting...", "success");
     if (btn) btn.disabled = true;
 
-    const next = params.get("next") || "chat.html";
+    const next = params.get("next") || "user-chat.html";
     window.setTimeout(() => {
       window.location.href = next;
     }, 700);
