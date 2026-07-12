@@ -46,7 +46,7 @@ a.button {
 
 .home-topbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
@@ -56,6 +56,7 @@ a.button {
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
 }
+
 
 .brand {
   display: flex;
