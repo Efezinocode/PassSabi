@@ -31,7 +31,6 @@ import {
 import { streamChatReply } from "./api.js";
 
 document.addEventListener("DOMContentLoaded", function () {
-  const btn = document.getElementById("btn");
   const sendBtn = document.getElementById("sendBtn");
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chat-box");
@@ -47,17 +46,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const DEFAULT_PLACEHOLDER = "Type your question here...";
 
-  if (btn) {
-    btn.addEventListener("click", function () {
-      window.location.href = "chat.html";
-    });
-  }
-
   if (!chatBox || !input || !form) return;
 
   let sessions = loadSessions();
   let currentChatId = loadCurrentChatId();
   let searchQuery = "";
+  let isGenerating = false;
+  let activeController = null;
+  let activeAssistantBubble = null;
+  let activePartialText = "";
 
   if (!Array.isArray(sessions)) sessions = [];
 
@@ -82,15 +79,12 @@ document.addEventListener("DOMContentLoaded", function () {
     saveCurrentChatId(currentChatId);
   }
 
-  let isGenerating = false;
-  let activeController = null;
-  let activeAssistantBubble = null;
-  let activePartialText = "";
-
   function getCurrentSession() {
-    return sessions.find(function (session) {
-      return session.id === currentChatId;
-    }) || null;
+    return (
+      sessions.find(function (session) {
+        return session.id === currentChatId;
+      }) || null
+    );
   }
 
   function clearTransientStatus() {
@@ -110,12 +104,16 @@ document.addEventListener("DOMContentLoaded", function () {
       : sessions.filter(function (session) {
           const title = String(session.title || "").toLowerCase();
           const messagesText = Array.isArray(session.messages)
-            ? session.messages.map((msg) => String(msg.text || "")).join(" ").toLowerCase()
+            ? session.messages
+                .map((msg) => String(msg.text || ""))
+                .join(" ")
+                .toLowerCase()
             : "";
           return title.includes(query) || messagesText.includes(query);
         });
 
     if (!historyList) return;
+
     renderHistory(historyList, visibleSessions, currentChatId, {
       onSwitch: switchSession,
       onDelete: deleteSession,
@@ -522,20 +520,20 @@ document.addEventListener("DOMContentLoaded", function () {
       const userMsg = { role: "user", text: visibleMessage, ts: Date.now() };
       session.messages.push(userMsg);
 
-if (autoTitle && session.title === "New Chat") {
-  session.title = makeSessionTitle(visibleMessage);
-}
+      if (autoTitle && session.title === "New Chat") {
+        session.title = makeSessionTitle(visibleMessage);
+      }
 
-session.updatedAt = Date.now();
-saveSessions(sessions);
+      session.updatedAt = Date.now();
+      saveSessions(sessions);
 
-if (welcomeScreen) {
-  welcomeScreen.hidden = true;
-}
+      if (welcomeScreen) {
+        welcomeScreen.hidden = true;
+      }
 
-appendMessage(chatBox, userMsg);
-refreshHistory();
-updateWelcomeState(welcomeScreen, session);
+      appendMessage(chatBox, userMsg);
+      refreshHistory();
+      updateWelcomeState(welcomeScreen, session);
 
       if (clearInput) {
         input.value = "";
