@@ -1,4 +1,5 @@
 // js/api.js
+
 function extractSseData(block) {
   const lines = String(block || "").split(/\r?\n/);
   const dataLines = [];
@@ -10,6 +11,22 @@ function extractSseData(block) {
   }
 
   return dataLines.length ? dataLines.join("\n") : null;
+}
+
+function tryParseJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+async function readResponseAsText(response) {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
 }
 
 export async function streamChatReply({
@@ -28,12 +45,7 @@ export async function streamChatReply({
   });
 
   if (!response.ok) {
-    let errorText = "";
-    try {
-      errorText = await response.text();
-    } catch {
-      errorText = "";
-    }
+    const errorText = await readResponseAsText(response);
     throw new Error(errorText || `HTTP ${response.status}`);
   }
 
@@ -45,81 +57,97 @@ export async function streamChatReply({
   const decoder = new TextDecoder();
   let buffer = "";
   let fullText = "";
+  let doneCalled = false;
 
-  while (true) {
-    const { done, value } = await reader.read();
+  const emitParsedBlock = (block) => {
+    const data = extractSseData(block);
+    if (!data || data === "[DONE]") return;
 
-    if (value) {
-      buffer += decoder.decode(value, { stream: true });
+    const parsed = tryParseJson(data);
+    if (!parsed) return;
+
+    if (parsed.error) {
+      throw new Error(parsed.error);
     }
 
-    while (true) {
-      const boundary = buffer.indexOf("\n\n");
-      if (boundary === -1) break;
+    if (typeof parsed.chunk === "string" && parsed.chunk.length > 0) {
+      const incoming = parsed.chunk;
+      fullText += incoming;
 
-      const block = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-
-      const data = extractSseData(block);
-      if (!data || data === "[DONE]") continue;
-
-      let parsed;
-      try {
-        parsed = JSON.parse(data);
-      } catch {
-        continue;
+      if (typeof onChunk === "function") {
+        onChunk(incoming, fullText, parsed);
       }
+    }
 
-      if (parsed.error) {
-        throw new Error(parsed.error);
-      }
-
-      if (parsed.chunk) {
-        const incoming = String(parsed.chunk);
-        fullText += incoming;
-
-        if (typeof onChunk === "function") {
-          onChunk(incoming, fullText, parsed);
-        }
-      }
-
-      if (parsed.done && typeof onDone === "function") {
+    if (parsed.done && !doneCalled) {
+      doneCalled = true;
+      if (typeof onDone === "function") {
         onDone(parsed.provider);
       }
     }
+  };
 
-    if (done) break;
-  }
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
 
-  buffer += decoder.decode();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+      }
 
-  if (buffer.trim()) {
-    const data = extractSseData(buffer);
-    if (data && data !== "[DONE]") {
-      try {
-        const parsed = JSON.parse(data);
+      let boundaryIndex = buffer.indexOf("\n\n");
+      while (boundaryIndex !== -1) {
+        const block = buffer.slice(0, boundaryIndex);
+        buffer = buffer.slice(boundaryIndex + 2);
 
-        if (parsed.error) {
-          throw new Error(parsed.error);
-        }
-
-        if (parsed.chunk) {
-          const incoming = String(parsed.chunk);
-          fullText += incoming;
-
-          if (typeof onChunk === "function") {
-            onChunk(incoming, fullText, parsed);
+        try {
+          emitParsedBlock(block);
+        } catch (err) {
+          try {
+            await reader.cancel();
+          } catch {
+            // ignore cancel errors
           }
+          throw err;
         }
 
-        if (parsed.done && typeof onDone === "function") {
-          onDone(parsed.provider);
+        boundaryIndex = buffer.indexOf("\n\n");
+      }
+
+      if (done) break;
+    }
+
+    buffer += decoder.decode();
+
+    if (buffer.trim()) {
+      try {
+        emitParsedBlock(buffer);
+      } catch (err) {
+        try {
+          await reader.cancel();
+        } catch {
+          // ignore cancel errors
         }
-      } catch {
-        // ignore trailing parse noise
+        throw err;
       }
     }
-  }
 
-  return fullText.trim();
+    if (!doneCalled && typeof onDone === "function") {
+      onDone(undefined);
+    }
+
+    return fullText.trim();
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw err;
+    }
+
+    throw err instanceof Error ? err : new Error(String(err || "Chat stream failed."));
+  } finally {
+    try {
+      reader.releaseLock?.();
+    } catch {
+      // ignore
+    }
+  }
 }
