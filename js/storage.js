@@ -12,7 +12,7 @@ function safeJsonParse(value, fallback = null) {
 }
 
 function makeId(prefix = "item") {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return `\( {prefix}_ \){Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function cleanText(value) {
@@ -24,6 +24,15 @@ function capText(value, max = 120) {
   if (!text) return "";
   return text.length > max ? `${text.slice(0, max).trim()}…` : text;
 }
+
+// ==================== NEW: LOGIN CHECK ====================
+export function isLoggedIn() {
+  return !!(
+    localStorage.getItem("passsabi_session_v1") || 
+    sessionStorage.getItem("passsabi_session_v1")
+  );
+}
+// ========================================================
 
 export function normalizeSession(session) {
   const safeId =
@@ -69,7 +78,10 @@ export function createSession(title = "New Chat") {
   });
 }
 
+// Updated: Guests get empty sessions
 export function loadSessions() {
+  if (!isLoggedIn()) return [];
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -85,7 +97,10 @@ export function loadSessions() {
   }
 }
 
+// Updated: Only save when logged in
 export function saveSessions(sessions) {
+  if (!isLoggedIn()) return;   // ← Guests never save
+
   try {
     const ordered = Array.isArray(sessions)
       ? sessions.slice().sort((a, b) => {
@@ -102,7 +117,9 @@ export function saveSessions(sessions) {
   }
 }
 
+// Updated
 export function loadCurrentChatId() {
+  if (!isLoggedIn()) return "";
   try {
     return localStorage.getItem(CURRENT_CHAT_KEY) || "";
   } catch {
@@ -111,6 +128,7 @@ export function loadCurrentChatId() {
 }
 
 export function saveCurrentChatId(chatId) {
+  if (!isLoggedIn()) return;
   try {
     localStorage.setItem(CURRENT_CHAT_KEY, chatId || "");
   } catch (error) {
@@ -389,4 +407,4 @@ export function getStorageKeys() {
     LEGACY_MESSAGES_KEY,
     MEMORY_KEY,
   };
-      }
+}
