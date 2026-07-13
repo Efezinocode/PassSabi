@@ -1,28 +1,27 @@
 // api/chat.js
 const { buildProviderOrder, runProvider } = require("./providers");
 
-module.exports = async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+function parseBody(req) {
+  if (!req || req.body == null) return {};
+  if (typeof req.body === "object") return req.body;
+
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body || "{}");
+    } catch {
+      return {};
+    }
   }
 
-  try {
-    const body =
-      typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : (req.body || {});
+  return {};
+}
 
-    const message = typeof body.message === "string" ? body.message.trim() : "";
-    const requestedProvider =
-      typeof body.provider === "string"
-        ? body.provider.trim().toLowerCase()
-        : "";
+function sendSseEvent(res, payload) {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
 
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
-    }
-
-    const systemInstruction = `
+function buildSystemInstruction() {
+  return `
 You are PassSabi AI, a friendly AI teacher for students.
 
 Facts about you:
@@ -41,11 +40,36 @@ Teaching style:
 - If the user asks for explanations, give short sections, examples, and quick learning tips when useful.
 - Do not greet with a welcome message.
 - Do not say you are under development.
-- Do not use markdown, asterisks, hashtags, or code fences.
-- Use plain text only.
+- Use simple markdown when helpful:
+  - headings
+  - bullet points
+  - numbered lists
+  - short code blocks only when needed
+- Do not overuse symbols.
 - If asked who founded PassSabi AI, answer: Uzezi Great Efezino.
-    `.trim();
+`.trim();
+}
 
+module.exports = async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const body = parseBody(req);
+
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    const requestedProvider =
+      typeof body.provider === "string"
+        ? body.provider.trim().toLowerCase()
+        : "";
+
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    const systemInstruction = buildSystemInstruction();
     const providerOrder = buildProviderOrder(requestedProvider);
 
     res.status(200);
@@ -58,63 +82,84 @@ Teaching style:
       res.flushHeaders();
     }
 
-    const sendEvent = (payload) => {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    };
+    let finished = false;
 
     for (const provider of providerOrder) {
       let emittedAnyChunk = false;
 
       try {
-        sendEvent({ status: "thinking", provider });
+        sendSseEvent(res, { status: "thinking", provider });
 
-        const text = await runProvider(
-          provider,
-          message,
-          systemInstruction,
-          (chunk) => {
-            emittedAnyChunk = true;
-            sendEvent({ chunk, provider });
+        const text = await runProvider(provider, message, systemInstruction, (chunk) => {
+          if (chunk == null || finished) return;
+
+          emittedAnyChunk = true;
+          sendSseEvent(res, {
+            chunk: String(chunk),
+            provider,
+          });
+        });
+
+        if (finished) return res.end();
+
+        const finalText = typeof text === "string" ? text.trim() : "";
+
+        if (finalText) {
+          if (!emittedAnyChunk) {
+            sendSseEvent(res, {
+              chunk: finalText,
+              provider,
+            });
           }
-        );
 
-        if (text && text.trim()) {
-          sendEvent({ done: true, provider });
+          sendSseEvent(res, {
+            done: true,
+            provider,
+          });
+
+          finished = true;
           return res.end();
         }
       } catch (err) {
         console.error(`${provider} failed:`, err);
 
-        if (emittedAnyChunk) {
-          sendEvent({
-            error: `Stream interrupted from ${provider}. ${err.message}`,
+        if (emittedAnyChunk && !finished) {
+          sendSseEvent(res, {
+            error: `Stream interrupted from ${provider}. ${
+              err?.message || "Unknown error"
+            }`,
             provider,
           });
+          finished = true;
           return res.end();
         }
       }
     }
 
-    sendEvent({ error: "All providers failed. Please try again later." });
+    if (!finished) {
+      sendSseEvent(res, {
+        error: "All providers failed. Please try again later.",
+      });
+      return res.end();
+    }
+
     return res.end();
   } catch (error) {
     console.error("PassSabi Error:", error);
 
     if (res.headersSent) {
       try {
-        res.write(
-          `data: ${JSON.stringify({
-            error: error.message || "Server error. Please try again.",
-          })}\n\n`
-        );
-      } catch (e) {
-        console.error("Failed to write stream error:", e);
+        sendSseEvent(res, {
+          error: error?.message || "Server error. Please try again.",
+        });
+      } catch (writeErr) {
+        console.error("Failed to write stream error:", writeErr);
       }
       return res.end();
     }
 
     return res.status(500).json({
-      error: error.message || "Server error. Please try again.",
+      error: error?.message || "Server error. Please try again.",
     });
   }
 };
