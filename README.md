@@ -46,6 +46,7 @@ Contributing
 Credits
 
 - Founder & developer: Uzezi Great Efezino (Efezino Uzezi)
+- (https://uzezigreatefezino.vercel.app/)
 - Repository: "PassSabi AI" (https://github.com/Efezinocode/PassSabi)
 
 Contact
