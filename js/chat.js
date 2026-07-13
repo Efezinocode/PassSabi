@@ -7,6 +7,9 @@ import {
   migrateLegacyMessages,
   removeLegacyMessagesKey,
   makeSessionTitle,
+  loadMemory,
+  buildMemoryPrompt,
+  updateMemoryFromMessage,
 } from "./storage.js";
 
 import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
@@ -516,6 +519,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const visibleMessage = String(visibleText ?? message ?? prompt).trim();
 
+    updateMemoryFromMessage(visibleMessage);
+
     if (appendUserMessage) {
       const userMsg = { role: "user", text: visibleMessage, ts: Date.now() };
       session.messages.push(userMsg);
@@ -557,8 +562,15 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 90000);
 
     try {
+      const memory = buildMemoryPrompt(loadMemory());
+      const history = session.messages
+        .slice(-8)
+        .map((msg) => ({ role: msg.role, text: msg.text }));
+
       const finalText = await streamChatReply({
         message: prompt,
+        memory,
+        history,
         signal: controller.signal,
         onChunk: function (_chunk, fullText) {
           activePartialText = fullText;
