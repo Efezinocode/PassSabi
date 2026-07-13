@@ -10,14 +10,14 @@ function buildProviderOrder(requestedProvider) {
   return [requestedProvider, ...baseOrder.filter((p) => p !== requestedProvider)];
 }
 
-async function runProvider(provider, message, systemInstruction, onChunk) {
-  if (provider === "groq") return callGroq(message, systemInstruction, onChunk);
-  if (provider === "grok") return callGrok(message, systemInstruction, onChunk);
-  if (provider === "gemini") return callGemini(message, systemInstruction, onChunk);
+async function runProvider(provider, message, systemInstruction, onChunk, signal) {
+  if (provider === "groq") return callGroq(message, systemInstruction, onChunk, signal);
+  if (provider === "grok") return callGrok(message, systemInstruction, onChunk, signal);
+  if (provider === "gemini") return callGemini(message, systemInstruction, onChunk, signal);
   throw new Error(`Unknown provider: ${provider}`);
 }
 
-async function callGroq(message, systemInstruction, onChunk) {
+async function callGroq(message, systemInstruction, onChunk, signal) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("Groq API key is missing");
 
@@ -41,10 +41,11 @@ async function callGroq(message, systemInstruction, onChunk) {
         max_tokens: 1024,
         stream: true,
       }),
+      signal,
     });
 
     if (!response.ok) {
-      const raw = await response.text();
+      const raw = await response.text().catch(() => "");
       lastError = new Error(`Groq Error (${model}): ${response.status} ${raw}`);
       continue;
     }
@@ -52,7 +53,8 @@ async function callGroq(message, systemInstruction, onChunk) {
     const full = await consumeSseStream(
       response,
       (json) => json.choices?.[0]?.delta?.content || "",
-      onChunk
+      onChunk,
+      signal
     );
 
     if (full) return full;
@@ -62,7 +64,7 @@ async function callGroq(message, systemInstruction, onChunk) {
   throw lastError || new Error("Groq request failed");
 }
 
-async function callGrok(message, systemInstruction, onChunk) {
+async function callGrok(message, systemInstruction, onChunk, signal) {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("Grok API key is missing");
 
@@ -82,24 +84,26 @@ async function callGrok(message, systemInstruction, onChunk) {
       max_tokens: 1024,
       stream: true,
     }),
+    signal,
   });
 
   if (!response.ok) {
-    const raw = await response.text();
+    const raw = await response.text().catch(() => "");
     throw new Error(`Grok Error: ${response.status} ${raw}`);
   }
 
   const full = await consumeSseStream(
     response,
     (json) => json.choices?.[0]?.delta?.content || "",
-    onChunk
+    onChunk,
+    signal
   );
 
   if (!full) throw new Error("Grok Error: no response text found");
   return full;
 }
 
-async function callGemini(message, systemInstruction, onChunk) {
+async function callGemini(message, systemInstruction, onChunk, signal) {
   const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Gemini API key is missing");
 
@@ -118,11 +122,12 @@ async function callGemini(message, systemInstruction, onChunk) {
           maxOutputTokens: 1024,
         },
       }),
+      signal,
     }
   );
 
   if (!response.ok) {
-    const raw = await response.text();
+    const raw = await response.text().catch(() => "");
     throw new Error(`Gemini Error: ${response.status} ${raw}`);
   }
 
@@ -132,14 +137,15 @@ async function callGemini(message, systemInstruction, onChunk) {
       json.candidates?.[0]?.content?.parts
         ?.map((part) => part?.text || "")
         .join("") || "",
-    onChunk
+    onChunk,
+    signal
   );
 
   if (!full) throw new Error("Gemini Error: no response text found");
   return full;
 }
 
-async function consumeSseStream(response, extractText, onChunk) {
+async function consumeSseStream(response, extractText, onChunk, signal) {
   if (!response.body) {
     throw new Error("Missing streaming response body");
   }
@@ -149,75 +155,91 @@ async function consumeSseStream(response, extractText, onChunk) {
   let buffer = "";
   let fullText = "";
 
-  while (true) {
-    let result;
-    try {
-      result = await reader.read();
-    } catch (err) {
-      if (fullText.trim()) return fullText.trim();
-      throw err;
-    }
-
-    const { done, value } = result;
-
-    if (value) {
-      buffer += decoder.decode(value, { stream: true });
-    }
-
+  try {
     while (true) {
-      const boundary = buffer.indexOf("\n\n");
-      if (boundary === -1) break;
+      if (signal?.aborted) {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
 
-      const block = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-
-      const data = extractSseData(block);
-      if (!data || data === "[DONE]") continue;
-
+      let result;
       try {
-        const parsed = JSON.parse(data);
-        const text = extractText(parsed) || "";
-        if (text) {
-          const delta = computeDelta(fullText, text);
-          if (delta) {
-            fullText += delta;
-            onChunk(delta);
+        result = await reader.read();
+      } catch (err) {
+        if (fullText.trim()) return fullText.trim();
+        throw err;
+      }
+
+      const { done, value } = result;
+
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+      }
+
+      while (true) {
+        const boundary = buffer.indexOf("\n\n");
+        if (boundary === -1) break;
+
+        const block = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+
+        const data = extractSseData(block);
+        if (!data || data === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const text = extractText(parsed) || "";
+          if (text) {
+            const delta = computeDelta(fullText, text);
+            if (delta) {
+              fullText += delta;
+              if (typeof onChunk === "function") {
+                onChunk(delta);
+              }
+            }
           }
+        } catch {
+          // ignore parse noise
         }
-      } catch {
-        // ignore parse noise
+      }
+
+      if (done) break;
+    }
+
+    buffer += decoder.decode();
+
+    if (buffer.trim()) {
+      const data = extractSseData(buffer);
+      if (data && data !== "[DONE]") {
+        try {
+          const parsed = JSON.parse(data);
+          const text = extractText(parsed) || "";
+          if (text) {
+            const delta = computeDelta(fullText, text);
+            if (delta) {
+              fullText += delta;
+              if (typeof onChunk === "function") {
+                onChunk(delta);
+              }
+            }
+          }
+        } catch {
+          // ignore leftover parse noise
+        }
       }
     }
 
-    if (done) break;
-  }
-
-  buffer += decoder.decode();
-
-  if (buffer.trim()) {
-    const data = extractSseData(buffer);
-    if (data && data !== "[DONE]") {
-      try {
-        const parsed = JSON.parse(data);
-        const text = extractText(parsed) || "";
-        if (text) {
-          const delta = computeDelta(fullText, text);
-          if (delta) {
-            fullText += delta;
-            onChunk(delta);
-          }
-        }
-      } catch {
-        // ignore leftover parse noise
-      }
+    return fullText.trim();
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // ignore
     }
   }
-
-  return fullText.trim();
 }
 
 function extractSseData(block) {
-  const lines = block.split(/\r?\n/);
+  const lines = String(block || "").split(/\r?\n/);
   const dataLines = [];
 
   for (const line of lines) {
@@ -226,18 +248,18 @@ function extractSseData(block) {
     }
   }
 
-  if (dataLines.length === 0) return null;
-  return dataLines.join("\n");
+  return dataLines.length ? dataLines.join("\n") : null;
 }
 
 function computeDelta(currentFullText, incomingText) {
-  if (!incomingText) return "";
-  if (!currentFullText) return incomingText;
-  if (incomingText === currentFullText) return "";
-  if (incomingText.startsWith(currentFullText)) {
-    return incomingText.slice(currentFullText.length);
+  const next = String(incomingText || "");
+  if (!next) return "";
+  if (!currentFullText) return next;
+  if (next === currentFullText) return "";
+  if (next.startsWith(currentFullText)) {
+    return next.slice(currentFullText.length);
   }
-  return incomingText;
+  return next;
 }
 
 module.exports = {
