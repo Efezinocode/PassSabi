@@ -78,7 +78,9 @@ export function currentUser() {
 export function requireAuth(redirectTo = "login.html") {
   const user = currentUser();
   if (!user) {
-    window.location.replace(redirectTo);
+    const nextPage = window.location.pathname.split("/").pop() || "user-chat.html";
+    const joiner = redirectTo.includes("?") ? "&" : "?";
+    window.location.replace(`${redirectTo}${joiner}next=${encodeURIComponent(nextPage)}`);
     return null;
   }
   return user;
@@ -317,20 +319,51 @@ function bindForgotPasswordForm() {
   });
 }
 
+function getUserInitials(user) {
+  const source = String(user?.fullName || user?.email || "P").trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] || "P"}${parts[1][0] || "S"}`.toUpperCase();
+  }
+  return (source.slice(0, 2) || "P").toUpperCase();
+}
+
 function bindProfilePage() {
+  const currentUserBadge = qs("currentUserBadge");
+  const currentUserName = qs("currentUserName");
+  const currentUserEmail = qs("currentUserEmail");
   const profileName = qs("profileName");
   const profileEmail = qs("profileEmail");
   const profileStatus = qs("profileStatus");
   const profileJoined = qs("profileJoined");
   const logoutBtn = qs("logoutBtn");
 
-  if (!profileName && !profileEmail && !profileStatus && !profileJoined && !logoutBtn) return;
+  if (
+    !currentUserBadge &&
+    !currentUserName &&
+    !currentUserEmail &&
+    !profileName &&
+    !profileEmail &&
+    !profileStatus &&
+    !profileJoined &&
+    !logoutBtn
+  ) {
+    return;
+  }
 
   const user = requireAuth("login.html");
   if (!user) return;
 
-  if (profileName) profileName.textContent = user.fullName || "PassSabi User";
-  if (profileEmail) profileEmail.textContent = user.email || "";
+  const displayName = user.fullName || "PassSabi User";
+  const displayEmail = user.email || "";
+  const initials = getUserInitials(user);
+
+  if (currentUserBadge) currentUserBadge.textContent = initials;
+  if (currentUserName) currentUserName.textContent = displayName;
+  if (currentUserEmail) currentUserEmail.textContent = displayEmail || "Signed in";
+
+  if (profileName) profileName.textContent = displayName;
+  if (profileEmail) profileEmail.textContent = displayEmail;
   if (profileStatus) profileStatus.textContent = user.verified ? "Verified" : "Not verified";
 
   if (profileJoined) {
@@ -375,4 +408,9 @@ document.addEventListener("DOMContentLoaded", () => {
   bindForgotPasswordForm();
   bindProfilePage();
   renderAuthHeader();
+});
+
+window.addEventListener("pageshow", () => {
+  renderAuthHeader();
+  bindProfilePage();
 });
