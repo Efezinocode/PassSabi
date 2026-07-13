@@ -1,5 +1,3 @@
-// js/api.js
-
 function extractSseData(block) {
   const lines = String(block || "").split(/\r?\n/);
   const dataLines = [];
@@ -31,6 +29,9 @@ async function readResponseAsText(response) {
 
 export async function streamChatReply({
   message,
+  memory = "",
+  history = [],
+  provider = "",
   signal,
   onChunk,
   onDone,
@@ -40,7 +41,7 @@ export async function streamChatReply({
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, memory, history, provider }),
     signal,
   });
 
