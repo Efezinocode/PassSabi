@@ -58,6 +58,16 @@ document.addEventListener("DOMContentLoaded", function () {
   let activeController = null;
   let activeAssistantBubble = null;
   let activePartialText = "";
+  
+  function canUseMemory() {
+  const isUserPage =
+    window.location.pathname.includes("user-chat");
+
+  // Change this key if auth.js uses a different one
+  const isLoggedIn = !!localStorage.getItem("passsabi_user");
+
+  return isUserPage && isLoggedIn;
+  }
 
   if (!Array.isArray(sessions)) sessions = [];
 
@@ -519,7 +529,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const visibleMessage = String(visibleText ?? message ?? prompt).trim();
 
-    updateMemoryFromMessage(visibleMessage);
+    if (canUseMemory()) {
+       updateMemoryFromMessage(visibleMessage);
+    }
 
     if (appendUserMessage) {
       const userMsg = { role: "user", text: visibleMessage, ts: Date.now() };
@@ -562,7 +574,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 90000);
 
     try {
-      const memory = buildMemoryPrompt(loadMemory());
+      const memory = canUseMemory()
+       ? buildMemoryPrompt(loadMemory())
+       : "";
       const history = session.messages
         .slice(-8)
         .map((msg) => ({ role: msg.role, text: msg.text }));
