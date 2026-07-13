@@ -19,6 +19,12 @@ function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function capText(value, max = 120) {
+  const text = cleanText(value);
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max).trim()}…` : text;
+}
+
 export function normalizeSession(session) {
   const safeId =
     typeof session?.id === "string" && session.id.trim()
@@ -44,8 +50,10 @@ export function normalizeSession(session) {
     id: safeId,
     title: safeTitle,
     messages: safeMessages,
-    createdAt: typeof session?.createdAt === "number" ? session.createdAt : Date.now(),
-    updatedAt: typeof session?.updatedAt === "number" ? session.updatedAt : Date.now(),
+    createdAt:
+      typeof session?.createdAt === "number" ? session.createdAt : Date.now(),
+    updatedAt:
+      typeof session?.updatedAt === "number" ? session.updatedAt : Date.now(),
     pinned: Boolean(session?.pinned),
   };
 }
@@ -181,7 +189,7 @@ function normalizeFact(fact) {
     id: typeof fact.id === "string" && fact.id.trim() ? fact.id.trim() : makeId("fact"),
     key,
     label: cleanText(fact.label) || key,
-    value,
+    value: capText(value, 120),
     source: cleanText(fact.source) || "chat",
     updatedAt: typeof fact.updatedAt === "number" ? fact.updatedAt : Date.now(),
   };
@@ -191,23 +199,31 @@ function normalizeMemory(memory) {
   const base = createEmptyMemory();
   if (!memory || typeof memory !== "object") return base;
 
-  const profile = memory.profile && typeof memory.profile === "object" ? memory.profile : {};
-  base.profile.name = cleanText(profile.name);
+  const profile =
+    memory.profile && typeof memory.profile === "object" ? memory.profile : {};
+  base.profile.name = capText(profile.name, 60);
   base.profile.examType = cleanText(profile.examType).toUpperCase();
-  base.profile.favoriteSubject = cleanText(profile.favoriteSubject);
-  base.profile.school = cleanText(profile.school);
+  base.profile.favoriteSubject = capText(profile.favoriteSubject, 60);
+  base.profile.school = capText(profile.school, 80);
   base.profile.classLevel = cleanText(profile.classLevel).toUpperCase();
 
-  const preferences = memory.preferences && typeof memory.preferences === "object" ? memory.preferences : {};
+  const preferences =
+    memory.preferences && typeof memory.preferences === "object"
+      ? memory.preferences
+      : {};
   base.preferences.tone = cleanText(preferences.tone) || base.preferences.tone;
-  base.preferences.language = cleanText(preferences.language) || base.preferences.language;
-  base.preferences.answerLength = cleanText(preferences.answerLength) || base.preferences.answerLength;
+  base.preferences.language =
+    cleanText(preferences.language) || base.preferences.language;
+  base.preferences.answerLength =
+    cleanText(preferences.answerLength) || base.preferences.answerLength;
 
   base.facts = Array.isArray(memory.facts)
     ? memory.facts.map(normalizeFact).filter(Boolean).slice(-25)
     : [];
 
-  base.lastUpdated = typeof memory.lastUpdated === "number" ? memory.lastUpdated : Date.now();
+  base.lastUpdated =
+    typeof memory.lastUpdated === "number" ? memory.lastUpdated : Date.now();
+
   return base;
 }
 
@@ -230,7 +246,7 @@ export function saveMemory(memory) {
 }
 
 function upsertFact(memory, key, value, label, source = "chat") {
-  const nextValue = cleanText(value);
+  const nextValue = capText(value, 120);
   if (!nextValue) return;
 
   const nextFact = normalizeFact({
@@ -254,9 +270,14 @@ function extractMemoryHints(message) {
 
   const hints = {};
 
-  const nameMatch = text.match(/\b(?:my name is|call me|i'm)\s+([A-Za-z][A-Za-z' -]{1,40})\b/i);
+  const nameMatch = text.match(
+    /\b(?:my name is|call me)\s+([A-Za-z][A-Za-z' -]{1,40})\b/i
+  );
   if (nameMatch) {
-    const name = cleanText(nameMatch[1]).replace(/\b(?:student|boy|girl|man|woman)\b/gi, "").trim();
+    const name = cleanText(nameMatch[1]).replace(
+      /\b(?:student|boy|girl|man|woman)\b/gi,
+      ""
+    );
     if (name && !/^\d+$/.test(name)) hints.name = name;
   }
 
@@ -264,7 +285,7 @@ function extractMemoryHints(message) {
   if (examMatch) hints.examType = examMatch[1].toUpperCase();
 
   const subjectMatch = text.match(
-    /\b(?:my favorite subject is|my favourite subject is|my best subject is|i love)\s+([A-Za-z][A-Za-z0-9 &/.-]{1,40})/i
+    /\b(?:my favorite subject is|my favourite subject is|my best subject is)\s+([A-Za-z][A-Za-z0-9 &/.-]{1,40})/i
   );
   if (subjectMatch) {
     const subject = cleanText(subjectMatch[1]);
@@ -274,12 +295,16 @@ function extractMemoryHints(message) {
   const classMatch = text.match(
     /\b(?:i am in|i'm in|my class is)\s+(jss\s?[123]|ss\s?[123]|primary\s?[1-6]|year\s?[1-6])\b/i
   );
-  if (classMatch) hints.classLevel = cleanText(classMatch[1]).replace(/\s+/g, "").toUpperCase();
+  if (classMatch) {
+    hints.classLevel = cleanText(classMatch[1]).replace(/\s+/g, "").toUpperCase();
+  }
 
   const schoolMatch = text.match(/\b(?:my school is|i go to)\s+(.{2,60}?)(?:[.!?]|$)/i);
   if (schoolMatch) hints.school = cleanText(schoolMatch[1]);
 
-  const preferenceMatch = text.match(/\b(?:please answer|speak)\s+(simply|briefly|shortly|clearly)\b/i);
+  const preferenceMatch = text.match(
+    /\b(?:please answer|speak)\s+(simply|briefly|shortly|clearly)\b/i
+  );
   if (preferenceMatch) hints.answerLength = preferenceMatch[1].toLowerCase();
 
   return hints;
@@ -364,4 +389,4 @@ export function getStorageKeys() {
     LEGACY_MESSAGES_KEY,
     MEMORY_KEY,
   };
-}
+      }
