@@ -12,7 +12,7 @@ function safeJsonParse(value, fallback = null) {
 }
 
 function makeId(prefix = "item") {
-  return `\( {prefix}_ \){Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function cleanText(value) {
