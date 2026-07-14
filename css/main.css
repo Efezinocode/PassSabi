@@ -7,6 +7,8 @@
 
 html {
     scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: #38bdf8 #0f172a;
 }
 
 body {
@@ -90,39 +92,78 @@ h1 {
     color: #e5e7eb;
 }
 
+/* ===== Shared navbar ===== */
 .navbar {
     width: 100%;
     max-width: 760px;
     margin: 0 auto 22px;
-    padding: 0 14px;
+    padding: 16px 20px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.nav-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.nav-left h2 {
+    color: #38bdf8;
+    margin: 0;
+    font-size: 1.6rem;
+    white-space: nowrap;
+}
+
+.nav-links {
+    display: flex;
     align-items: center;
     gap: 14px;
     flex-wrap: wrap;
 }
 
-.navbar h2 {
-    color: #38bdf8;
-    margin: 0;
-    font-size: 1.6rem;
-}
-
-.nav-links {
-    display: flex;
-    gap: 18px;
-    flex-wrap: wrap;
-}
-
 .nav-links a {
-    color: #ffffff;
+    color: #e2e8f0;
     text-decoration: none;
-    font-weight: bold;
-    transition: color 0.25s ease;
+    font-weight: 600;
+    transition: color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
 
 .nav-links a:hover {
     color: #38bdf8;
+    transform: translateY(-1px);
+    text-decoration: none;
+}
+
+/* ===== Back button ===== */
+.back-btn {
+    display: inline-block;
+    text-decoration: none;
+    font-size: 30px;
+    font-weight: 400;
+    line-height: 1;
+    color: #ffffff;
+    background: transparent;
+    border: none;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin-right: 10px;
+    flex: 0 0 auto;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.back-btn:hover {
+    opacity: 0.8;
+    text-decoration: none;
+}
+
+.back-btn:active {
+    transform: scale(0.95);
 }
 
 .chat-message {
@@ -135,108 +176,42 @@ h1 {
     color: #2563eb;
 }
 
-/* ===== Shared navbar + back button ===== */
-
-.navbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  flex-wrap: wrap;
-}
-
-.nav-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.nav-left h2 {
-  margin: 0;
-  white-space: nowrap;
-}
-
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.nav-links a {
-  text-decoration: none;
-  font-weight: 600;
-  color: #e2e8f0;
-  transition: color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
-}
-
-.nav-links a:hover {
-  color: #38bdf8;
-  transform: translateY(-1px);
-}
-
-.back-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  text-decoration: none;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1;
-  color: #0f172a;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  flex: 0 0 auto;
-  transition: transform 0.15s ease, background 0.15s ease;
-}
-
-.back-btn:hover {
-  background: rgba(255, 255, 255, 0.28);
-}
-
-.back-btn:active {
-  transform: scale(0.95);
-}
-
 /* ===== Scrollbar styling ===== */
-
-html {
-  scrollbar-width: thin;
-  scrollbar-color: #38bdf8 #0f172a;
-}
-
 body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+    width: 8px;
+    height: 8px;
 }
 
 body::-webkit-scrollbar-track {
-  background: #0f172a;
+    background: #0f172a;
 }
 
 body::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #38bdf8, #0ea5e9);
-  border-radius: 999px;
+    background: linear-gradient(180deg, #38bdf8, #0ea5e9);
+    border-radius: 999px;
 }
 
 body::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #4cc9ff, #1d9fe8);
+    background: linear-gradient(180deg, #4cc9ff, #1d9fe8);
 }
 
 /* ===== Mobile ===== */
-
 @media (max-width: 768px) {
-  .navbar {
-    padding: 14px 16px;
-  }
+    .navbar {
+        padding: 14px 16px;
+    }
 
-  .nav-links {
-    width: 100%;
-    justify-content: flex-start;
-  }
+    .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .nav-left h2 {
+        font-size: 1.35rem;
+    }
+
+    .back-btn {
+        font-size: 26px;
+        margin-right: 6px;
+    }
 }
