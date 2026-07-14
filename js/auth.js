@@ -34,6 +34,10 @@ function clearNotice(el) {
   el.textContent = "";
 }
 
+function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim().toLowerCase());
+}
+
 function getUsers() {
   return safeJsonParse(localStorage.getItem(USERS_KEY), []) || [];
 }
@@ -120,6 +124,7 @@ export function login({ email, password, rememberMe = false }) {
   const cleanPassword = String(password || "");
 
   if (!cleanEmail) return { ok: false, message: "Enter your email address." };
+  if (!isEmail(cleanEmail)) return { ok: false, message: "Enter a valid email address." };
   if (!cleanPassword) return { ok: false, message: "Enter your password." };
 
   const users = getUsers();
@@ -148,9 +153,7 @@ export function signup({ fullName, email, password, confirmPassword, termsAccept
 
   if (!name) return { ok: false, message: "Enter your full name." };
   if (!cleanEmail) return { ok: false, message: "Enter your email address." };
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-    return { ok: false, message: "Enter a valid email address." };
-  }
+  if (!isEmail(cleanEmail)) return { ok: false, message: "Enter a valid email address." };
   if (cleanPassword.length < 6) {
     return { ok: false, message: "Password must be at least 6 characters." };
   }
@@ -183,6 +186,7 @@ export function signup({ fullName, email, password, confirmPassword, termsAccept
 export function requestPasswordReset(email) {
   const cleanEmail = String(email || "").trim().toLowerCase();
   if (!cleanEmail) return { ok: false, message: "Enter your email address." };
+  if (!isEmail(cleanEmail)) return { ok: false, message: "Enter a valid email address." };
 
   const users = getUsers();
   const user = users.find((u) => String(u.email).toLowerCase() === cleanEmail);
@@ -214,6 +218,7 @@ function bindPasswordToggleButtons() {
       const nextType = input.type === "password" ? "text" : "password";
       input.type = nextType;
       btn.textContent = nextType === "password" ? "Show" : "Hide";
+      btn.setAttribute("aria-label", nextType === "password" ? "Show password" : "Hide password");
     });
   });
 }
@@ -267,6 +272,11 @@ function bindSignupForm() {
 
   const notice = qs("signupNotice");
   const btn = qs("signupBtn");
+  const params = new URLSearchParams(window.location.search);
+
+  if (qs("signupEmail") && params.get("email")) {
+    qs("signupEmail").value = params.get("email");
+  }
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -303,6 +313,11 @@ function bindForgotPasswordForm() {
 
   const notice = qs("forgotNotice");
   const btn = qs("forgotBtn");
+  const params = new URLSearchParams(window.location.search);
+
+  if (qs("forgotEmail") && params.get("email")) {
+    qs("forgotEmail").value = params.get("email");
+  }
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -384,6 +399,19 @@ function bindProfilePage() {
   }
 }
 
+function redirectIfAlreadyLoggedIn() {
+  const user = currentUser();
+  const path = window.location.pathname.split("/").pop();
+
+  if (user && (path === "login.html" || path === "signup.html" || path === "forgot-password.html")) {
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get("next") || "user-chat.html";
+    window.location.replace(next);
+    return true;
+  }
+  return false;
+}
+
 window.PassSabiAuth = {
   currentUser,
   requireAuth,
@@ -395,12 +423,7 @@ window.PassSabiAuth = {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-  const loggedInUser = currentUser();
-
-  if (loggedInUser && window.location.pathname.includes("login.html")) {
-    window.location.replace("user-chat.html");
-    return;
-  }
+  if (redirectIfAlreadyLoggedIn()) return;
 
   bindPasswordToggleButtons();
   bindLoginForm();
