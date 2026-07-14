@@ -14,6 +14,72 @@
   <link rel="stylesheet" href="css/responsive.css">
 
   <style>
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+      flex-wrap: wrap;
+    }
+
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .nav-left h2 {
+      margin: 0;
+      white-space: nowrap;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      font-weight: 600;
+      color: #e2e8f0;
+      transition: color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: #38bdf8;
+      transform: translateY(-1px);
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+      color: #0f172a;
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      flex: 0 0 auto;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    .back-btn:active {
+      transform: scale(0.95);
+    }
+
     .about-cards {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -56,23 +122,22 @@
       padding: 12px 18px;
       border-radius: 999px;
       font-weight: 700;
+      text-decoration: none;
+      transition: transform 0.2s ease, opacity 0.2s ease;
     }
 
     .about-actions .primary {
       background: linear-gradient(135deg, #38bdf8, #0ea5e9);
       color: #fff;
-      text-decoration: none;
     }
 
     .about-actions .secondary {
       background: rgba(255, 255, 255, 0.04);
       color: #e2e8f0;
       border: 1px solid rgba(148, 163, 184, 0.16);
-      text-decoration: none;
     }
 
     .about-actions a:hover {
-      text-decoration: none;
       transform: translateY(-1px);
     }
 
@@ -81,12 +146,26 @@
         grid-template-columns: 1fr;
       }
     }
+
+    @media (max-width: 768px) {
+      .navbar {
+        padding: 14px 16px;
+      }
+
+      .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
   </style>
 </head>
 <body>
   <header>
     <nav class="navbar" aria-label="Main Navigation">
-      <h2>🎓 PassSabi AI</h2>
+      <div class="nav-left">
+        <a href="javascript:history.back()" class="back-btn" aria-label="Go back">←</a>
+        <h2>🎓 PassSabi AI</h2>
+      </div>
 
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -131,6 +210,7 @@
 
     <div class="about-actions">
       <a class="primary" href="guest-chat.html">Start Free Chat</a>
+      <a class="secondary" href="contact.html">Contact Us</a>
     </div>
   </main>
 </body>
