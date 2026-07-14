@@ -1,120 +1,149 @@
+@media (max-width: 900px) {
+  .chat-container {
+    width: 100%;
+  }
+
+  .chat-bubble {
+    max-width: 88%;
+  }
+}
+
 @media (max-width: 600px) {
-    body {
-        padding: 18px 12px;
-    }
+  body:not(.chat-page) {
+    padding: 18px 12px;
+  }
 
-    .container {
-        padding: 18px 14px;
-    }
+  .container {
+    padding: 18px 14px;
+  }
 
-    .chat-container {
-        height: calc(100dvh - 64px);
-        min-height: calc(100dvh - 64px);
-        padding: 14px 10px 12px;
-    }
+  .chat-topbar {
+    padding: 0 10px;
+  }
 
-    #chat-box {
-        padding-bottom: 110px;
-        scroll-padding-bottom: 110px;
-    }
+  .chat-topbar h2 {
+    font-size: 1rem;
+  }
 
-    .chat-footer {
-        width: min(100%, 760px);
-        padding: 10px 10px calc(12px + env(safe-area-inset-bottom));
-    }
+  .topbar-login-link {
+    min-width: 74px;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 0.88rem;
+    border-radius: 12px;
+  }
 
-    .chat-bubble {
-        max-width: 92%;
-    }
+  .chat-container {
+    height: calc(100dvh - var(--topbar-height));
+    min-height: calc(100dvh - var(--topbar-height));
+    padding: 0;
+  }
 
-    .sidebar {
-        width: 100vw;
-        max-width: 100vw;
-        border-right: none;
-    }
+  .welcome-screen {
+    padding: 20px 12px 10px;
+  }
 
-    .share-menu {
-        width: 100%;
-    }
+  .welcome-card {
+    padding: 22px;
+    border-radius: 24px;
+  }
 
-    .lesson-tools {
-        width: 100%;
-    }
+  .welcome-card h1 {
+    font-size: 1.8rem;
+  }
 
-    .lesson-tool-btn {
-        flex: 1 1 100%;
-    }
+  #chat-box {
+    padding: 16px 10px 122px;
+    scroll-padding-bottom: 122px;
+  }
+
+  .chat-footer {
+    width: 100%;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .chat-input-wrap {
+    padding: 10px;
+    border-radius: 20px;
+  }
+
+  #userInput {
+    min-height: 48px;
+    padding-left: 12px;
+    padding-right: 56px;
+  }
+
+  #sendBtn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 14px;
+  }
+
+  .chat-bubble {
+    max-width: 92%;
+    padding: 13px 14px;
+    border-radius: 20px;
+  }
+
+  .sidebar {
+    width: 100vw;
+    max-width: 100vw;
+    border-right: none;
+  }
+
+  .share-menu {
+    width: 100%;
+  }
+
+  .lesson-tools {
+    width: 100%;
+  }
+
+  .lesson-tool-btn {
+    flex: 1 1 100%;
+  }
 }
 
 @media (max-width: 420px) {
-    .chat-topbar {
-        padding: 0 10px;
-    }
+  .menu-button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
 
-    .chat-topbar h2 {
-        font-size: 1rem;
-    }
+  .history-item-row {
+    gap: 6px;
+  }
 
-    .menu-button {
-        width: 40px;
-        height: 40px;
-        min-width: 40px;
-    }
+  .history-item-main {
+    padding: 10px 11px;
+  }
 
-    #userInput {
-        padding-right: 52px;
-    }
-
-    #sendBtn {
-        width: 38px;
-        height: 38px;
-        min-width: 38px;
-        right: 7px;
-    }
-
-    .welcome-card h1 {
-        font-size: 1.7rem;
-    }
-
-    .history-rename-btn,
-    .history-pin-btn,
-    .history-delete-btn {
-        width: 36px;
-        height: 36px;
-        min-width: 36px;
-    }
+  .history-menu-btn,
+  .history-rename-btn,
+  .history-pin-btn,
+  .history-delete-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
 }
 
 @media (hover: none) and (pointer: coarse) {
-    button:hover {
-        background: inherit;
-    }
+  button:hover {
+    transform: none;
+  }
 
-    .menu-button:hover {
-        background: rgba(255, 255, 255, 0.08);
-    }
-
-    .sidebar-action:hover {
-        background: #2563eb;
-    }
-
-    .history-item-main:hover {
-        background: rgba(255, 255, 255, 0.04);
-    }
-
-    .history-rename-btn:hover {
-        background: rgba(168, 85, 247, 0.14);
-    }
-
-    .history-delete-btn:hover {
-        background: rgba(239, 68, 68, 0.15);
-    }
-
-    .history-pin-btn:hover {
-        background: rgba(56, 189, 248, 0.12);
-    }
-
-    #sendBtn:hover {
-        background: #10b981;
-    }
+  .menu-button:hover,
+  .sidebar-action:hover,
+  .history-item-main:hover,
+  .history-menu-btn:hover,
+  .topbar-login-link:hover,
+  .sidebar-nav a:hover,
+  .message-action-btn:hover,
+  .lesson-tool-btn:hover,
+  .share-menu-item:hover {
+    transform: none;
+  }
 }
