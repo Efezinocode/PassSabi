@@ -1,49 +1,14 @@
 /* css/auth.css */
 
-:root {
-  color-scheme: dark;
-  --auth-bg: #08111f;
-  --auth-bg-2: #0f172a;
-  --auth-card: rgba(15, 23, 42, 0.84);
-  --auth-card-border: rgba(148, 163, 184, 0.16);
-  --auth-text: #e2e8f0;
-  --auth-muted: #94a3b8;
-  --auth-primary: #38bdf8;
-  --auth-primary-2: #0ea5e9;
-  --auth-success: #10b981;
-  --auth-danger: #ef4444;
-  --auth-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
-  --auth-radius: 28px;
-  --auth-radius-sm: 18px;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  min-height: 100%;
-}
-
 body.auth-page {
   margin: 0;
   min-height: 100vh;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: var(--auth-text);
+  color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 30%),
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.14), transparent 30%),
     radial-gradient(circle at top right, rgba(16, 185, 129, 0.08), transparent 26%),
-    linear-gradient(180deg, var(--auth-bg) 0%, var(--auth-bg-2) 100%);
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
+    linear-gradient(180deg, #08111f 0%, #0f172a 100%);
+  overflow-x: hidden;
 }
 
 .auth-shell {
@@ -56,21 +21,21 @@ a:hover {
 .auth-card,
 .profile-card {
   width: 100%;
-  max-width: 480px;
-  border-radius: var(--auth-radius);
-  background: var(--auth-card);
-  border: 1px solid var(--auth-card-border);
-  box-shadow: var(--auth-shadow);
+  max-width: 520px;
+  border-radius: 28px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(18px);
   overflow: hidden;
 }
 
 .profile-card {
-  max-width: 760px;
+  max-width: 840px;
 }
 
 .auth-header {
-  padding: 28px 28px 18px;
+  padding: 28px 28px 20px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
@@ -83,22 +48,28 @@ a:hover {
   text-decoration: none;
 }
 
+.brand:hover {
+  text-decoration: none;
+}
+
 .brand-badge {
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
-  border-radius: 15px;
-  background: linear-gradient(135deg, var(--auth-primary), var(--auth-primary-2));
+  border-radius: 16px;
+  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
   color: #fff;
   font-weight: 800;
-  box-shadow: 0 10px 24px rgba(14, 165, 233, 0.24);
+  box-shadow: 0 12px 26px rgba(14, 165, 233, 0.24);
+  flex: 0 0 auto;
 }
 
 .brand-text {
   display: flex;
   flex-direction: column;
-  line-height: 1.1;
+  line-height: 1.15;
+  min-width: 0;
 }
 
 .brand-text strong {
@@ -107,13 +78,13 @@ a:hover {
 }
 
 .brand-text span {
-  color: var(--auth-muted);
-  font-size: 0.86rem;
+  color: #94a3b8;
+  font-size: 0.88rem;
 }
 
 .auth-title {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: clamp(1.5rem, 3vw, 1.9rem);
   letter-spacing: -0.03em;
   color: #f8fafc;
 }
@@ -147,7 +118,7 @@ label {
 }
 
 .helper-link {
-  color: var(--auth-primary);
+  color: #38bdf8;
   font-size: 0.88rem;
   text-decoration: none;
 }
@@ -162,10 +133,10 @@ label {
 
 input {
   width: 100%;
-  height: 54px;
+  min-height: 54px;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.97);
   color: #0f172a;
   padding: 0 16px;
   outline: none;
@@ -187,8 +158,7 @@ input:focus {
   top: 50%;
   right: 10px;
   transform: translateY(-50%);
-  height: 36px;
-  min-width: 36px;
+  min-height: 36px;
   padding: 0 10px;
   border-radius: 10px;
   border: 0;
@@ -222,15 +192,16 @@ input:focus {
 .checkbox input {
   width: 18px;
   height: 18px;
-  accent-color: var(--auth-primary);
+  min-height: auto;
+  accent-color: #38bdf8;
 }
 
 .auth-btn {
   width: 100%;
-  height: 54px;
+  min-height: 54px;
   border-radius: 16px;
   margin-top: 6px;
-  background: linear-gradient(135deg, var(--auth-primary), var(--auth-primary-2));
+  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
   color: #fff;
   font-weight: 700;
   border: 0;
@@ -257,11 +228,11 @@ input:focus {
 .auth-footer {
   padding: 0 28px 28px;
   text-align: center;
-  color: var(--auth-muted);
+  color: #94a3b8;
 }
 
 .auth-footer a {
-  color: var(--auth-primary);
+  color: #38bdf8;
   font-weight: 600;
   text-decoration: none;
 }
@@ -328,11 +299,46 @@ input:focus {
 
 .profile-item span,
 .small {
-  color: var(--auth-muted);
+  color: #94a3b8;
 }
 
 .profile-item strong {
   color: #f8fafc;
+}
+
+.section-title {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  color: #f8fafc;
+}
+
+.note {
+  margin-top: 0;
+  color: #cbd5e1;
+  line-height: 1.7;
+}
+
+.profile-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.secondary-btn {
+  min-height: 54px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.secondary-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(148, 163, 184, 0.24);
 }
 
 @media (max-width: 720px) {
@@ -376,8 +382,9 @@ input:focus {
   }
 
   input,
-  .auth-btn {
-    height: 52px;
+  .auth-btn,
+  .secondary-btn {
+    min-height: 52px;
     border-radius: 14px;
   }
 }
