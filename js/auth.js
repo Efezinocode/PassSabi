@@ -9,6 +9,7 @@ const SIGNUP_PAGE = "signup.html";
 const FORGOT_PAGE = "forgot-password.html";
 const PROFILE_PAGE = "profile.html";
 const RESET_PAGE = "reset-password.html";
+const USER_CHAT_PAGE = "user-chat.html";
 
 const AUTH_SESSION_KEY = "passsabi_session_v1";
 const AUTH_USER_KEY = "passsabi_user_v1";
@@ -16,6 +17,24 @@ const REMEMBER_ME_KEY = "passsabi_remember_me";
 
 let authReadyPromise = null;
 let authSubscription = null;
+let authBootstrapped = false;
+
+function currentPath() {
+  return window.location.pathname.split("/").pop() || "";
+}
+
+function pageName() {
+  return currentPath().toLowerCase();
+}
+
+function isAuthPage() {
+  const page = pageName();
+  return [LOGIN_PAGE, SIGNUP_PAGE, FORGOT_PAGE, RESET_PAGE].includes(page);
+}
+
+function isProfilePage() {
+  return pageName() === PROFILE_PAGE;
+}
 
 function readJson(key, fallback = null) {
   try {
@@ -172,7 +191,7 @@ function isEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim().toLowerCase());
 }
 
-function getNextUrl(defaultUrl = "user-chat.html") {
+function getNextUrl(defaultUrl = USER_CHAT_PAGE) {
   const params = new URLSearchParams(window.location.search);
   const next = params.get("next");
   if (!next) return defaultUrl;
@@ -383,7 +402,7 @@ async function initLogin() {
     }
 
     showNotice(notice, "Login successful. Redirecting...", "success");
-    window.location.replace(getNextUrl("user-chat.html"));
+    window.location.replace(getNextUrl(USER_CHAT_PAGE));
   });
 }
 
@@ -455,7 +474,7 @@ async function initSignup() {
 
     if (data?.session) {
       showNotice(notice, "Account created. Redirecting...", "success");
-      window.location.replace(getNextUrl("user-chat.html"));
+      window.location.replace(getNextUrl(USER_CHAT_PAGE));
       return;
     }
 
@@ -562,6 +581,9 @@ async function initProfile() {
   if (!user) return;
 
   const form = $("profileForm");
+  if (!form || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
+
   const notice = $("profileNotice");
   const btn = $("profileBtn");
 
@@ -586,9 +608,6 @@ async function initProfile() {
   if (profilePlan) profilePlan.textContent = profileRow?.plan || "free";
   if (profileCoins) profileCoins.textContent = String(profileRow?.coins ?? 0);
 
-  if (!form || form.dataset.bound === "true") return;
-  form.dataset.bound = "true";
-
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     clearNotice(notice);
@@ -598,13 +617,12 @@ async function initProfile() {
 
     setBusy(btn, true, "Saving...");
 
-    const updates = {
+    const { error: authError } = await supabase.auth.updateUser({
       data: {
         full_name: newName,
       },
-    };
+    });
 
-    const { error: authError } = await supabase.auth.updateUser(updates);
     if (authError) {
       setBusy(btn, false);
       showNotice(notice, authError.message, "error");
@@ -646,16 +664,13 @@ async function initProfile() {
 }
 
 async function redirectIfAlreadyLoggedIn() {
-  const path = window.location.pathname.split("/").pop() || "";
-  const authPages = [LOGIN_PAGE, SIGNUP_PAGE, FORGOT_PAGE];
-  if (!authPages.includes(path)) return false;
+  if (!isAuthPage()) return false;
 
   await ensureAuthReady();
 
   const user = currentUser();
   if (user) {
-    const next = getNextUrl("user-chat.html");
-    window.location.replace(next);
+    window.location.replace(getNextUrl(USER_CHAT_PAGE));
     return true;
   }
 
@@ -676,27 +691,41 @@ function wireGenericAuthButtons() {
   });
 }
 
-function initAuthPages() {
-  bindPasswordToggleButtons();
-  initLogin();
-  initSignup();
-  initForgotPassword();
-  initResetPassword();
-  initProfile();
+function renderPageState() {
   renderAuthHeader();
   wireGenericAuthButtons();
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+async function bootstrapAuth() {
   await ensureAuthReady();
+
   if (await redirectIfAlreadyLoggedIn()) return;
-  initAuthPages();
+
+  renderPageState();
+
+  if (isProfilePage()) {
+    await initProfile();
+    return;
+  }
+
+  if (isAuthPage()) {
+    bindPasswordToggleButtons();
+    initLogin();
+    initSignup();
+    initForgotPassword();
+    initResetPassword();
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  if (authBootstrapped) return;
+  authBootstrapped = true;
+  await bootstrapAuth();
 });
 
 window.addEventListener("pageshow", async () => {
   await ensureAuthReady();
-  renderAuthHeader();
-  wireGenericAuthButtons();
+  renderPageState();
 });
 
 ensureAuthReady().catch((error) => {
