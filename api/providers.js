@@ -243,9 +243,11 @@ function extractSseData(block) {
   const dataLines = [];
 
   for (const line of lines) {
-    if (line.startsWith("data:")) {
-      dataLines.push(line.slice(5).replace(/^\s+/, ""));
-    }
+    if (!line.startsWith("data:")) continue;
+
+    let value = line.slice(5);
+    if (value.startsWith(" ")) value = value.slice(1);
+    dataLines.push(value);
   }
 
   return dataLines.length ? dataLines.join("\n") : null;
