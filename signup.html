@@ -13,110 +13,150 @@
 </head>
 <body class="auth-page">
   <main class="auth-shell">
-    <section class="auth-card">
-      <header class="auth-header">
-        <a class="brand" href="index.html" aria-label="Back to home">
-          <div class="brand-badge">P</div>
-          <div class="brand-text">
-            <strong>PassSabi AI</strong>
-            <span>Create your student account</span>
-          </div>
-        </a>
-
-        <h1 class="auth-title">Create your account</h1>
-        <p class="auth-subtitle">Join PassSabi to save progress, manage chats, and learn faster.</p>
-      </header>
-
-      <div class="auth-body">
-        <div id="signupNotice" class="notice" aria-live="polite"></div>
-
-        <form id="signupForm" novalidate>
-          <div class="form-group">
-            <div class="label-row">
-              <label for="fullName">Full name</label>
+    <section class="auth-layout">
+      <aside class="auth-hero">
+        <div class="auth-hero-top">
+          <a class="brand" href="index.html" aria-label="Back to home">
+            <div class="brand-badge">P</div>
+            <div class="brand-text">
+              <strong>PassSabi AI</strong>
+              <span>Create your student account</span>
             </div>
-            <input
-              id="fullName"
-              type="text"
-              placeholder="Enter your full name"
-              autocomplete="name"
-              required
-            />
-          </div>
+          </a>
 
-          <div class="form-group">
-            <div class="label-row">
-              <label for="signupEmail">Email address</label>
-            </div>
-            <input
-              id="signupEmail"
-              type="email"
-              placeholder="you@example.com"
-              autocomplete="email"
-              required
-            />
-          </div>
+          <span class="hero-pill">Join now</span>
+        </div>
 
-          <div class="form-group">
-            <div class="label-row">
-              <label for="signupPassword">Password</label>
-            </div>
-            <div class="input-wrap">
+        <h1 class="auth-hero-title">Create your account.</h1>
+        <p class="auth-hero-text">
+          Save progress, keep your chats, and build a smarter study routine with PassSabi AI.
+        </p>
+
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <strong>Private by default</strong>
+            <span>Your data stays tied to your account</span>
+          </div>
+          <div class="hero-stat">
+            <strong>Study progress</strong>
+            <span>Future-ready for streaks and memory</span>
+          </div>
+          <div class="hero-stat">
+            <strong>Built for growth</strong>
+            <span>Phase-by-phase product roadmap</span>
+          </div>
+        </div>
+
+        <div class="hero-list">
+          <div class="hero-item">Personalized AI teacher experience</div>
+          <div class="hero-item">Supabase auth and session sync</div>
+          <div class="hero-item">Clean mobile-first interface</div>
+        </div>
+
+        <p class="hero-foot">
+          One account will power login, chat history, and later voice chat + PWA.
+        </p>
+      </aside>
+
+      <section class="auth-card">
+        <header class="auth-header">
+          <h2 class="auth-title">Sign up</h2>
+          <p class="auth-subtitle">Create your PassSabi account in a few seconds.</p>
+        </header>
+
+        <div class="auth-body">
+          <div id="signupNotice" class="notice" aria-live="polite"></div>
+
+          <form id="signupForm" novalidate>
+            <div class="form-group">
+              <div class="label-row">
+                <label for="fullName">Full name</label>
+              </div>
               <input
-                id="signupPassword"
-                type="password"
-                placeholder="Create a password"
-                autocomplete="new-password"
+                id="fullName"
+                type="text"
+                placeholder="Enter your full name"
+                autocomplete="name"
                 required
               />
-              <button
-                type="button"
-                class="input-icon-btn"
-                data-toggle-password
-                data-target="signupPassword"
-              >
-                Show
-              </button>
             </div>
-          </div>
 
-          <div class="form-group">
-            <div class="label-row">
-              <label for="confirmPassword">Confirm password</label>
-            </div>
-            <div class="input-wrap">
+            <div class="form-group">
+              <div class="label-row">
+                <label for="signupEmail">Email address</label>
+              </div>
               <input
-                id="confirmPassword"
-                type="password"
-                placeholder="Repeat your password"
-                autocomplete="new-password"
+                id="signupEmail"
+                type="email"
+                placeholder="you@example.com"
+                autocomplete="email"
                 required
               />
-              <button
-                type="button"
-                class="input-icon-btn"
-                data-toggle-password
-                data-target="confirmPassword"
-              >
-                Show
-              </button>
             </div>
-          </div>
 
-          <div class="row" style="margin-bottom: 16px;">
-            <label class="checkbox">
-              <input id="terms" type="checkbox" required />
-              <span>I agree to the terms and privacy policy</span>
-            </label>
-          </div>
+            <div class="form-group">
+              <div class="label-row">
+                <label for="signupPassword">Password</label>
+              </div>
+              <div class="input-wrap">
+                <input
+                  id="signupPassword"
+                  type="password"
+                  placeholder="Create a password"
+                  autocomplete="new-password"
+                  required
+                />
+                <button
+                  type="button"
+                  class="input-icon-btn"
+                  data-toggle-password
+                  data-target="signupPassword"
+                >
+                  Show
+                </button>
+              </div>
+            </div>
 
-          <button id="signupBtn" class="auth-btn" type="submit">Create account</button>
-        </form>
-      </div>
+            <div class="form-group">
+              <div class="label-row">
+                <label for="confirmPassword">Confirm password</label>
+              </div>
+              <div class="input-wrap">
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Repeat your password"
+                  autocomplete="new-password"
+                  required
+                />
+                <button
+                  type="button"
+                  class="input-icon-btn"
+                  data-toggle-password
+                  data-target="confirmPassword"
+                >
+                  Show
+                </button>
+              </div>
+            </div>
 
-      <div class="auth-footer">
-        Already have an account? <a href="login.html">Login</a>
-      </div>
+            <div class="row auth-row">
+              <label class="checkbox">
+                <input id="terms" type="checkbox" required />
+                <span>I agree to the terms and privacy policy</span>
+              </label>
+
+              <a class="tiny-link" href="login.html">Have an account?</a>
+            </div>
+
+            <button id="signupBtn" class="auth-btn" type="submit">Create account</button>
+          </form>
+        </div>
+
+        <div class="auth-footer">
+          Already have an account? <a href="login.html">Login</a>
+        </div>
+      </section>
     </section>
   </main>
 </body>
