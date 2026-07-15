@@ -1,4 +1,3 @@
-// js/user-shell.js
 import { currentUser, clearSession, syncAuthState } from "./auth.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
