@@ -13,7 +13,6 @@
 
   <link rel="canonical" href="https://passsabi.vercel.app/" />
 
-  <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://passsabi.vercel.app/" />
   <meta property="og:title" content="PassSabi AI | Your Personal AI Teacher" />
@@ -21,7 +20,6 @@
   <meta property="og:image" content="https://passsabi.vercel.app/og-image.png?v=4" />
   <meta property="og:site_name" content="PassSabi AI" />
 
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="PassSabi AI | Your Personal AI Teacher" />
   <meta name="twitter:description" content="PassSabi AI helps students learn step by step and prepare for exams." />
@@ -34,36 +32,81 @@
 <body class="home-page">
   <main class="home-wrap">
     <header class="home-topbar">
-      <a class="brand" href="index.html" aria-label="PassSabi AI">
+      <a class="brand" href="index.html" aria-label="PassSabi AI home">
         <div class="brand-mark">P</div>
         <div class="brand-text">
           <strong>PassSabi AI</strong>
           <span>Your Personal AI Teacher</span>
         </div>
       </a>
+
+      <nav class="home-nav" aria-label="Primary">
+        <a href="guest-chat.html">Try free</a>
+        <a href="login.html">Login</a>
+        <a class="start-btn" href="signup.html">Sign up</a>
+      </nav>
     </header>
 
     <section class="hero">
-      <div class="hero-card">
-        <p class="kicker">Free AI learning for every student</p>
+      <section class="hero-card">
+        <p class="kicker">Built for students, polished for real use</p>
 
-        <h1>Learn Faster with PassSabi AI.</h1>
+        <h1>Learn faster with PassSabi AI.</h1>
 
-        <p>
-          Ask questions, get step-by-step explanations, solve assignments, complete homework,
-          and prepare for WAEC, NECO, JAMB, GCE and NABTEB, all in one place.
+        <p class="hero-text">
+          Ask questions, get step-by-step explanations, solve assignments, prepare for WAEC, NECO,
+          JAMB, GCE, and NABTEB, all in one clean learning space.
         </p>
 
         <div class="hero-cta">
           <a href="guest-chat.html" class="btn">Start Free Chat</a>
+          <a href="login.html" class="btn btn-outline">Login</a>
         </div>
-      </div>
 
-      <div class="preview">
+        <div class="stats">
+          <div class="stat">
+            <strong>Fast replies</strong>
+            <span>Streaming chat that feels smooth</span>
+          </div>
+          <div class="stat">
+            <strong>Saved sessions</strong>
+            <span>Supabase-backed login and history</span>
+          </div>
+          <div class="stat">
+            <strong>Mobile ready</strong>
+            <span>Designed for Android first</span>
+          </div>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>Clear explanations</h3>
+            <p>Break complex topics into simple steps you can actually follow.</p>
+          </article>
+
+          <article class="feature">
+            <h3>Study support</h3>
+            <p>Use it for homework, revision, assignments, and exam preparation.</p>
+          </article>
+
+          <article class="feature">
+            <h3>Built to grow</h3>
+            <p>Ready for voice chat, PWA install, memory, and learning tools.</p>
+          </article>
+        </div>
+      </section>
+
+      <aside class="preview" aria-label="Chat preview">
         <div class="preview-card">
           <div class="preview-window">
+            <div class="preview-top">
+              <span class="preview-dot"></span>
+              <span class="preview-dot"></span>
+              <span class="preview-dot"></span>
+            </div>
+
             <div class="preview-bubble ai">
-              👋 Hello! I'm PassSabi AI. How can I help you today?
+              👋 Hello! I am PassSabi AI. How can I help you today?
             </div>
 
             <div class="preview-bubble user">
@@ -72,8 +115,7 @@
 
             <div class="preview-bubble ai">
               A quadratic equation is a polynomial equation of degree 2.
-              It has the general form:
-              <br><br>
+              <br /><br />
               <strong>ax² + bx + c = 0</strong>
             </div>
 
@@ -82,11 +124,11 @@
             </div>
           </div>
         </div>
-      </div>
+      </aside>
     </section>
 
     <p class="footer-note">
-      PassSabi AI starts free. Sign in later whenever you want to save your chats and sync your learning across devices.
+      PassSabi AI starts free. Sign in later whenever you want to save chats and sync your learning across devices.
     </p>
   </main>
 </body>
