@@ -1,21 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-  <meta name="theme-color" content="#0f172a">
-  <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations, and learning support.">
-  <meta name="color-scheme" content="dark">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations, and learning support." />
+  <meta name="color-scheme" content="dark" />
 
   <title>PassSabi AI Chat | Your Personal AI Teacher</title>
 
-  <link rel="stylesheet" href="css/main.css">
-  <link rel="stylesheet" href="css/sidebar.css">
-  <link rel="stylesheet" href="css/chat.css">
-  <link rel="stylesheet" href="css/animations.css">
-  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/sidebar.css" />
+  <link rel="stylesheet" href="css/chat.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
 </head>
-
 <body class="chat-page">
 
   <header class="chat-topbar">
@@ -29,7 +28,13 @@
       ☰
     </button>
 
-    <h2>🎓 PassSabi AI</h2>
+    <a class="chat-brand" href="index.html" aria-label="PassSabi AI home">
+      <span class="chat-brand-mark">P</span>
+      <span class="chat-brand-copy">
+        <strong>PassSabi AI</strong>
+        <span>Your Personal AI Teacher</span>
+      </span>
+    </a>
 
     <div class="topbar-auth">
       <a href="login.html" class="topbar-login-link" id="topbarAuthLink">Login</a>
@@ -72,8 +77,9 @@
   <main class="chat-container">
     <section id="welcome-screen" class="welcome-screen" hidden>
       <div class="welcome-card">
-        <h1>PassSabi AI</h1>
-        <p>How can I help you today?</p>
+        <div class="welcome-badge">PassSabi AI</div>
+        <h1>How can I help you today?</h1>
+        <p>Ask anything about schoolwork, revisions, exams, or explanations.</p>
       </div>
     </section>
 
