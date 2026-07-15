@@ -246,18 +246,18 @@ async function initSignup() {
     }
 
     showNotice(
-  notice,
-  "🎉 Account created successfully!\n\nPlease check your email inbox (or Spam/Junk folder) and click the verification link to confirm your email before logging in.",
-  "success"
-);
+      notice,
+      "🎉 Account created successfully!\n\nPlease check your email inbox (or Spam/Junk folder) and click the verification link to confirm your email before logging in.",
+      "success"
+    );
 
-setTimeout(() => {
-  window.location.replace(
-    `${LOGIN_PAGE}?message=${encodeURIComponent(
-      "Please verify your email first. Check your inbox if you haven't done so."
-    )}`
-  );
-}, 3500);
+    setTimeout(() => {
+      window.location.replace(
+        `${LOGIN_PAGE}?message=${encodeURIComponent(
+          "Please verify your email first. Check your inbox."
+        )}`
+      );
+    }, 3500);
 
 
 async function initForgotPassword() {
