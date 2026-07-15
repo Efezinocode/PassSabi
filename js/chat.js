@@ -14,6 +14,7 @@ import {
 
 import { currentUser } from "./auth.js";
 import { streamChatReply } from "./api.js";
+import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
 import {
   appendMessage,
   appendTypingIndicator,
@@ -36,6 +37,7 @@ const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 const CHAT_INPUT_SELECTORS = [
   "#chatInput",
+  "#userInput",
   "#messageInput",
   "textarea[name='message']",
   "textarea[data-chat-input]",
@@ -113,6 +115,90 @@ function setCurrentSessionId(sessionId) {
   saveCurrentChatId(chatState.currentChatId);
 }
 
+function getChatBox() {
+  return $("#chat-box");
+}
+
+function getWelcomeScreen() {
+  return $("#welcome-screen");
+}
+
+function getHistoryList() {
+  return $("#chat-history");
+}
+
+function getChatForm() {
+  return $("#chat-form");
+}
+
+function getMenuButton() {
+  return $("#menuBtn");
+}
+
+function getSidebar() {
+  return $("#sidebar");
+}
+
+function getBackdrop() {
+  return $("#backdrop");
+}
+
+function closeSidebarPanel() {
+  const sidebar = getSidebar();
+  const backdrop = getBackdrop();
+  const menuBtn = getMenuButton();
+  if (sidebar && backdrop && menuBtn) {
+    closeSidebar(sidebar, backdrop, menuBtn);
+  }
+}
+
+function getHistoryHandlers() {
+  return {
+    onSwitch: (sessionId) => {
+      selectSession(sessionId);
+      closeSidebarPanel();
+    },
+    onPin: (sessionId) => {
+      const session = chatState.sessions.find((item) => item.id === sessionId);
+      if (!session) return;
+      pinSession(sessionId, !session.pinned);
+      refreshHistory();
+    },
+    onRename: (sessionId) => {
+      const nextTitle = prompt("Rename chat", "");
+      if (!nextTitle) return;
+      setSessionTitle(sessionId, nextTitle.trim());
+      refreshHistory();
+      refreshCurrentSession();
+      refreshWelcomeState();
+    },
+    onDelete: (sessionId) => {
+      deleteSession(sessionId);
+      closeSidebarPanel();
+    },
+  };
+}
+
+function refreshHistory(sessions = chatState.sessions) {
+  renderHistory(getHistoryList(), sessions, chatState.currentChatId, getHistoryHandlers());
+}
+
+function refreshCurrentSession(session = getCurrentSession()) {
+  renderCurrentSession(getChatBox(), session);
+}
+
+function refreshWelcomeState(session = getCurrentSession()) {
+  updateWelcomeState(getWelcomeScreen(), session);
+}
+
+function updateSendButtonState(isGenerating) {
+  setSendButtonState(getSendButton(), !!isGenerating);
+}
+
+function scrollChatToBottom() {
+  scrollToBottom(getChatBox());
+}
+
 function persistSessions() {
   saveSessions(chatState.sessions);
 }
@@ -172,9 +258,9 @@ function deleteSession(sessionId) {
     saveCurrentChatId(chatState.currentChatId);
   }
   persistSessions();
-  renderHistory(chatState.sessions, chatState.currentChatId);
-  renderCurrentSession(getCurrentSession());
-  updateWelcomeState(chatState.sessions);
+  refreshHistory();
+  refreshCurrentSession();
+  refreshWelcomeState();
 }
 
 function selectSession(sessionId) {
@@ -183,10 +269,10 @@ function selectSession(sessionId) {
 
   chatState.currentChatId = session.id;
   saveCurrentChatId(session.id);
-  renderCurrentSession(session);
-  renderHistory(chatState.sessions, chatState.currentChatId);
-  updateWelcomeState(chatState.sessions);
-  scrollToBottom();
+  refreshCurrentSession(session);
+  refreshHistory();
+  refreshWelcomeState();
+  scrollChatToBottom();
 }
 
 function createNewChat(title = "New Chat") {
@@ -194,10 +280,10 @@ function createNewChat(title = "New Chat") {
   chatState.sessions.unshift(session);
   setCurrentSessionId(session.id);
   persistSessions();
-  renderHistory(chatState.sessions, chatState.currentChatId);
-  renderCurrentSession(session);
-  updateWelcomeState(chatState.sessions);
-  scrollToBottom();
+  refreshHistory();
+  refreshCurrentSession(session);
+  refreshWelcomeState();
+  scrollChatToBottom();
   return session;
 }
 
@@ -313,25 +399,25 @@ export function buildLessonPrompt(action, answerText) {
 }
 
 function removeTyping() {
-  removeTypingPlaceholders();
+  removeTypingPlaceholders(getChatBox());
   chatState.typingVisible = false;
 }
 
 function showTyping() {
   if (chatState.typingVisible) return;
-  appendTypingIndicator();
+  appendTypingIndicator(getChatBox());
   chatState.typingVisible = true;
-  scrollToBottom();
+  scrollToBottom(getChatBox());
 }
 
 function updateActiveAssistantBubble(text) {
   const safe = String(text || "");
   chatState.activePartialText = safe;
   if (!chatState.lastAssistantBubble) {
-    chatState.lastAssistantBubble = createAssistantBubble();
+    chatState.lastAssistantBubble = createAssistantBubble(getChatBox());
   }
   updateAssistantBubble(chatState.lastAssistantBubble, safe);
-  autoScrollIfNeeded();
+  autoScrollIfNeeded(getChatBox());
 }
 
 function finalizeAssistantBubble(text) {
@@ -372,13 +458,13 @@ async function startGeneration(options = {}) {
     setSessionTitle(session.id, title);
   }
 
-  renderHistory(chatState.sessions, chatState.currentChatId);
-  renderCurrentSession(getCurrentSession());
-  updateWelcomeState(chatState.sessions);
+  refreshHistory();
+  refreshCurrentSession();
+  refreshWelcomeState();
 
   if (shouldClearInput) clearInput();
 
-  setSendButtonState(false);
+  updateSendButtonState(false);
   showTyping();
   chatState.lastAssistantBubble = null;
   chatState.activePartialText = "";
@@ -423,10 +509,10 @@ async function startGeneration(options = {}) {
     updateMemoryFromMessage(finalVisibleText || finalPromptText);
 
     persistSessions();
-    renderHistory(chatState.sessions, chatState.currentChatId);
-    renderCurrentSession(getCurrentSession());
-    updateWelcomeState(chatState.sessions);
-    scrollToBottom();
+    refreshHistory();
+    refreshCurrentSession();
+    refreshWelcomeState();
+    scrollChatToBottom();
   } catch (error) {
     removeTyping();
 
@@ -444,17 +530,23 @@ async function startGeneration(options = {}) {
     });
 
     persistSessions();
-    renderHistory(chatState.sessions, chatState.currentChatId);
-    renderCurrentSession(getCurrentSession());
-    updateWelcomeState(chatState.sessions);
-    scrollToBottom();
+    refreshHistory();
+    refreshCurrentSession();
+    refreshWelcomeState();
+    scrollChatToBottom();
   } finally {
     chatState.activeController = null;
-    setSendButtonState(true);
+    updateSendButtonState(false);
   }
 }
 
-function handleSendClick() {
+function handleChatSubmit(event) {
+  if (event) event.preventDefault();
+  handleSendClick(event);
+}
+
+function handleSendClick(event) {
+  if (event) event.preventDefault();
   const value = readInputValue();
   if (!value) return;
   startGeneration({
@@ -464,6 +556,7 @@ function handleSendClick() {
     promptText: value,
     autoTitle: true,
   });
+  closeSidebarPanel();
 }
 
 function handleEnterToSend(event) {
@@ -476,15 +569,20 @@ function handleEnterToSend(event) {
 function bindChatInput() {
   const input = getChatInput();
   const sendBtn = getSendButton();
+  const form = getChatForm();
 
   if (input && input.dataset.bound !== "true") {
     input.dataset.bound = "true";
     input.addEventListener("input", () => {
       autoResizeInput(input);
-      setSendButtonState(!!String(input.value || "").trim());
     });
     input.addEventListener("keydown", handleEnterToSend);
     autoResizeInput(input);
+  }
+
+  if (form && form.dataset.bound !== "true") {
+    form.dataset.bound = "true";
+    form.addEventListener("submit", handleChatSubmit);
   }
 
   if (sendBtn && sendBtn.dataset.bound !== "true") {
@@ -512,7 +610,7 @@ function bindSearch() {
   search.addEventListener("input", () => {
     const query = String(search.value || "").trim().toLowerCase();
     if (!query) {
-      renderHistory(chatState.sessions, chatState.currentChatId);
+      refreshHistory();
       return;
     }
 
@@ -526,7 +624,7 @@ function bindSearch() {
       return haystack.includes(query);
     });
 
-    renderHistory(filtered, chatState.currentChatId);
+    renderHistory(getHistoryList(), filtered, chatState.currentChatId, getHistoryHandlers());
   });
 }
 
@@ -558,7 +656,7 @@ function bindHistoryActions() {
     if (action === "pin-chat") {
       const session = chatState.sessions.find((item) => item.id === chatId);
       pinSession(chatId, !session?.pinned);
-      renderHistory(chatState.sessions, chatState.currentChatId);
+      refreshHistory();
       return;
     }
 
@@ -566,8 +664,8 @@ function bindHistoryActions() {
       const nextTitle = prompt("Rename chat", "");
       if (!nextTitle) return;
       setSessionTitle(chatId, nextTitle.trim());
-      renderHistory(chatState.sessions, chatState.currentChatId);
-      renderCurrentSession(getCurrentSession());
+      refreshHistory();
+      refreshCurrentSession();
     }
   });
 }
@@ -621,40 +719,101 @@ function bootstrapExistingSession() {
 function bindGlobalAuthRefresh() {
   window.addEventListener("passsabi:auth-changed", () => {
     bootstrapExistingSession();
-    renderHistory(chatState.sessions, chatState.currentChatId);
-    renderCurrentSession(getCurrentSession());
-    updateWelcomeState(chatState.sessions);
+    refreshHistory();
+    refreshCurrentSession();
+    refreshWelcomeState();
   });
 }
 
 function handleVisibilityRefresh() {
   window.addEventListener("pageshow", () => {
-    renderHistory(chatState.sessions, chatState.currentChatId);
-    renderCurrentSession(getCurrentSession());
-    updateWelcomeState(chatState.sessions);
+    refreshHistory();
+    refreshCurrentSession();
+    refreshWelcomeState();
   });
 }
 
 function initChatApp() {
   bootstrapExistingSession();
   bindChatInput();
-  bindNewChatButtons();
   bindSearch();
   bindHistoryActions();
   bindLessonToolButtons();
+  setMessageActionHandlers({
+    onRetry: () => {
+      const session = getCurrentSession();
+      const lastUser = [...(session?.messages || [])].reverse().find((msg) => msg.role === "user");
+      const retryText = lastUser?.text || chatState.lastUserMessageText || "";
+      if (!retryText) return;
+      startGeneration({
+        appendUserMessage: false,
+        clearInput: false,
+        visibleText: retryText,
+        promptText: retryText,
+        autoTitle: false,
+      });
+      closeSidebarPanel();
+    },
+    onLessonTool: (action, context = {}) => {
+      const lesson = buildLessonPrompt(action, context.answerText || "");
+      if (!lesson) return;
+      startGeneration({
+        appendUserMessage: true,
+        clearInput: false,
+        visibleText: lesson.visibleText,
+        promptText: lesson.promptText,
+        autoTitle: false,
+      });
+      closeSidebarPanel();
+    },
+    onShare: async (action) => {
+      const session = getCurrentSession();
+      const lastAssistant = [...(session?.messages || [])].reverse().find((msg) => msg.role === "assistant");
+      const text = lastAssistant?.text || "";
+      if (action === "pin") {
+        pinSession(session.id, !session.pinned);
+        refreshHistory();
+        return;
+      }
+      if (!text) return;
+
+      const title = session?.title || "PassSabi AI";
+      if (action === "native-share" && navigator.share) {
+        try {
+          await navigator.share({ title, text });
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
+      const blob = new Blob(
+        [action === "md" ? `# ${title}\n\n${text}` : text],
+        { type: "text/plain;charset=utf-8" }
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = action === "md" ?              "passsabi-chat.md" : "passsabi-chat.txt";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+   },
+  });
   bindGlobalAuthRefresh();
   handleVisibilityRefresh();
 
-  renderHistory(chatState.sessions, chatState.currentChatId);
-  renderCurrentSession(getCurrentSession());
-  updateWelcomeState(chatState.sessions);
-  setSendButtonState(!!readInputValue());
+  refreshHistory();
+  refreshCurrentSession();
+  refreshWelcomeState();
+  updateSendButtonState(false);
 
   const input = getChatInput();
   if (input) {
     autoResizeInput(input);
   }
-  scrollToBottom();
+  scrollChatToBottom();
 }
 
 document.addEventListener("DOMContentLoaded", initChatApp);
@@ -668,3 +827,4 @@ window.PassSabiChat = {
   buildStudyModePrompt,
   buildLessonPrompt,
 };
+
