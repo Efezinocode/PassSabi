@@ -13,6 +13,32 @@ function safeJsonParse(value, fallback = null) {
   }
 }
 
+function safeStorageGet(storage, key) {
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(storage, key, value) {
+  try {
+    storage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeStorageRemove(storage, key) {
+  try {
+    storage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function makeId(prefix = "item") {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -28,12 +54,20 @@ function capText(value, max = 120) {
 }
 
 function readStoredUser() {
-  const user = safeJsonParse(localStorage.getItem(AUTH_USER_KEY), null);
+  const user = safeJsonParse(safeStorageGet(localStorage, AUTH_USER_KEY), null);
   return user && typeof user === "object" ? user : null;
 }
 
 export function getActiveUserId() {
   return String(readStoredUser()?.id || "").trim();
+}
+
+export function isLoggedIn() {
+  return !!getActiveUserId();
+}
+
+export function getDataStorage() {
+  return isLoggedIn() ? localStorage : sessionStorage;
 }
 
 export function getStorageScopeSuffix() {
@@ -45,8 +79,68 @@ export function getScopedStorageKey(baseKey) {
   return `${baseKey}${getStorageScopeSuffix()}`;
 }
 
-export function isLoggedIn() {
-  return !!getActiveUserId();
+function readJsonKey(key, fallback = null) {
+  const storage = getDataStorage();
+  const raw = safeStorageGet(storage, key);
+
+  if (raw !== null) {
+    const parsed = safeJsonParse(raw, fallback);
+    return parsed === undefined ? fallback : parsed;
+  }
+
+  if (!isLoggedIn()) {
+    const legacyRaw = safeStorageGet(localStorage, key);
+    if (legacyRaw !== null) {
+      safeStorageSet(sessionStorage, key, legacyRaw);
+      safeStorageRemove(localStorage, key);
+      const parsed = safeJsonParse(legacyRaw, fallback);
+      return parsed === undefined ? fallback : parsed;
+    }
+  }
+
+  return fallback;
+}
+
+function writeJsonKey(key, value) {
+  const storage = getDataStorage();
+  if (value == null) {
+    safeStorageRemove(storage, key);
+    return;
+  }
+  safeStorageSet(storage, key, JSON.stringify(value));
+}
+
+function readStringKey(key) {
+  const storage = getDataStorage();
+  const value = safeStorageGet(storage, key);
+
+  if (value !== null && String(value).trim()) {
+    return String(value).trim();
+  }
+
+  if (!isLoggedIn()) {
+    const legacyValue = safeStorageGet(localStorage, key);
+    if (legacyValue && String(legacyValue).trim()) {
+      safeStorageSet(sessionStorage, key, String(legacyValue));
+      safeStorageRemove(localStorage, key);
+      return String(legacyValue).trim();
+    }
+  }
+
+  return "";
+}
+
+function writeStringKey(key, value) {
+  const storage = getDataStorage();
+  const safeValue = String(value || "").trim();
+
+  if (!safeValue) {
+    safeStorageRemove(storage, key);
+    return "";
+  }
+
+  safeStorageSet(storage, key, safeValue);
+  return safeValue;
 }
 
 export function normalizeSession(session) {
@@ -82,18 +176,6 @@ export function normalizeSession(session) {
   };
 }
 
-function readList(key) {
-  const storage = getDataStorage();
-  const data = safeJsonParse(storage.getItem(key), []);
-  return Array.isArray(data) ? data : [];
-}
-
-function writeList(key, value) {
-  const storage = getDataStorage();
-  storage.setItem(key, JSON.stringify(value));
-}
-
-
 function scopedSessionKey() {
   return getScopedStorageKey(STORAGE_KEY);
 }
@@ -118,29 +200,24 @@ export function createSession(title = "New Chat") {
 }
 
 export function loadSessions() {
-  const sessions = readList(scopedSessionKey());
-  return sessions.map(normalizeSession).sort((a, b) => b.updatedAt - a.updatedAt);
+  const sessions = readJsonKey(scopedSessionKey(), []);
+  return (Array.isArray(sessions) ? sessions : [])
+    .map(normalizeSession)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function saveSessions(sessions) {
   const safeSessions = Array.isArray(sessions) ? sessions.map(normalizeSession) : [];
-  writeList(scopedSessionKey(), safeSessions);
+  writeJsonKey(scopedSessionKey(), safeSessions);
   return safeSessions;
 }
 
 export function loadCurrentChatId() {
-  const value = localStorage.getItem(scopedCurrentChatKey());
-  return value && String(value).trim() ? String(value).trim() : "";
+  return readStringKey(scopedCurrentChatKey());
 }
 
 export function saveCurrentChatId(chatId) {
-  const id = String(chatId || "").trim();
-  if (!id) {
-    localStorage.removeItem(scopedCurrentChatKey());
-    return "";
-  }
-  localStorage.setItem(scopedCurrentChatKey(), id);
-  return id;
+  return writeStringKey(scopedCurrentChatKey(), chatId);
 }
 
 export function makeSessionTitle(text = "") {
@@ -152,42 +229,130 @@ export function makeSessionTitle(text = "") {
   return capText(title, 48) || "New Chat";
 }
 
+function readLegacyGuestValue(baseKey, fallback) {
+  const sessionRaw = safeStorageGet(sessionStorage, baseKey);
+  if (sessionRaw !== null) {
+    return safeJsonParse(sessionRaw, fallback);
+  }
+
+  const localRaw = safeStorageGet(localStorage, baseKey);
+  if (localRaw !== null) {
+    safeStorageSet(sessionStorage, baseKey, localRaw);
+    safeStorageRemove(localStorage, baseKey);
+    return safeJsonParse(localRaw, fallback);
+  }
+
+  return fallback;
+}
+
+function readLegacyGuestString(baseKey) {
+  const sessionValue = safeStorageGet(sessionStorage, baseKey);
+  if (sessionValue && String(sessionValue).trim()) {
+    return String(sessionValue).trim();
+  }
+
+  const localValue = safeStorageGet(localStorage, baseKey);
+  if (localValue && String(localValue).trim()) {
+    safeStorageSet(sessionStorage, baseKey, String(localValue));
+    safeStorageRemove(localStorage, baseKey);
+    return String(localValue).trim();
+  }
+
+  return "";
+}
+
 export function migrateGuestDataToUser() {
   const userId = getActiveUserId();
   if (!userId) return false;
-
-  const guestSessions = safeJsonParse(localStorage.getItem(STORAGE_KEY), []);
-  const guestCurrent = localStorage.getItem(CURRENT_CHAT_KEY);
-  const guestMemory = safeJsonParse(localStorage.getItem(MEMORY_KEY), null);
 
   const userSessionsKey = `${STORAGE_KEY}:${userId}`;
   const userCurrentKey = `${CURRENT_CHAT_KEY}:${userId}`;
   const userMemoryKey = `${MEMORY_KEY}:${userId}`;
 
-  const existingSessions = safeJsonParse(localStorage.getItem(userSessionsKey), []);
-  const mergedSessions = Array.isArray(existingSessions) && existingSessions.length
-    ? existingSessions
-    : Array.isArray(guestSessions)
-      ? guestSessions
-      : [];
+  const scopedSessions = safeJsonParse(safeStorageGet(localStorage, userSessionsKey), []);
+  const scopedCurrent = safeStorageGet(localStorage, userCurrentKey);
+  const scopedMemory = safeJsonParse(safeStorageGet(localStorage, userMemoryKey), null);
+
+  const guestSessions = readLegacyGuestValue(STORAGE_KEY, []);
+  const guestCurrent = readLegacyGuestString(CURRENT_CHAT_KEY);
+  const guestMemory = readLegacyGuestValue(MEMORY_KEY, null);
+
+  const normalizedExisting = Array.isArray(scopedSessions)
+    ? scopedSessions.map(normalizeSession)
+    : [];
+
+  const normalizedGuest = Array.isArray(guestSessions)
+    ? guestSessions.map(normalizeSession)
+    : [];
+
+  const byId = new Map();
+  [...normalizedExisting, ...normalizedGuest].forEach((session) => {
+    if (!session?.id) return;
+    byId.set(session.id, session);
+  });
+
+  const mergedSessions = Array.from(byId.values()).sort(
+    (a, b) => b.updatedAt - a.updatedAt
+  );
 
   if (mergedSessions.length) {
-    localStorage.setItem(userSessionsKey, JSON.stringify(mergedSessions.map(normalizeSession)));
+    safeStorageSet(localStorage, userSessionsKey, JSON.stringify(mergedSessions));
   }
 
-  if (guestCurrent && !localStorage.getItem(userCurrentKey)) {
-    localStorage.setItem(userCurrentKey, String(guestCurrent));
+  const currentCandidate =
+    (guestCurrent && byId.has(guestCurrent) && guestCurrent) ||
+    (scopedCurrent && byId.has(scopedCurrent) && scopedCurrent) ||
+    mergedSessions[0]?.id ||
+    "";
+
+  if (currentCandidate) {
+    safeStorageSet(localStorage, userCurrentKey, String(currentCandidate));
   }
 
-  if (guestMemory && !localStorage.getItem(userMemoryKey)) {
-    localStorage.setItem(userMemoryKey, JSON.stringify(guestMemory));
-  }
+  const existingMemory =
+    scopedMemory && typeof scopedMemory === "object" ? scopedMemory : {};
+  const guestMemorySafe =
+    guestMemory && typeof guestMemory === "object" ? guestMemory : {};
+
+  const mergedMemory = {
+    profile: {
+      ...(existingMemory.profile && typeof existingMemory.profile === "object"
+        ? existingMemory.profile
+        : {}),
+      ...(guestMemorySafe.profile && typeof guestMemorySafe.profile === "object"
+        ? guestMemorySafe.profile
+        : {}),
+    },
+    preferences: {
+      ...(existingMemory.preferences && typeof existingMemory.preferences === "object"
+        ? existingMemory.preferences
+        : {}),
+      ...(guestMemorySafe.preferences && typeof guestMemorySafe.preferences === "object"
+        ? guestMemorySafe.preferences
+        : {}),
+    },
+    facts: [
+      ...(Array.isArray(existingMemory.facts) ? existingMemory.facts : []),
+      ...(Array.isArray(guestMemorySafe.facts) ? guestMemorySafe.facts : []),
+    ].slice(-20),
+    updatedAt: Date.now(),
+  };
+
+  safeStorageSet(localStorage, userMemoryKey, JSON.stringify(mergedMemory));
+
+  safeStorageRemove(sessionStorage, STORAGE_KEY);
+  safeStorageRemove(sessionStorage, CURRENT_CHAT_KEY);
+  safeStorageRemove(sessionStorage, MEMORY_KEY);
+
+  safeStorageRemove(localStorage, STORAGE_KEY);
+  safeStorageRemove(localStorage, CURRENT_CHAT_KEY);
+  safeStorageRemove(localStorage, MEMORY_KEY);
 
   return true;
 }
 
 export function migrateLegacyMessages() {
-  const legacy = safeJsonParse(localStorage.getItem(LEGACY_MESSAGES_KEY), []);
+  const legacy = safeJsonParse(safeStorageGet(localStorage, LEGACY_MESSAGES_KEY), []);
   if (!Array.isArray(legacy) || !legacy.length) return false;
 
   const sessions = loadSessions();
@@ -212,11 +377,12 @@ export function migrateLegacyMessages() {
 }
 
 export function removeLegacyMessagesKey() {
-  localStorage.removeItem(LEGACY_MESSAGES_KEY);
+  safeStorageRemove(localStorage, LEGACY_MESSAGES_KEY);
 }
 
 export function loadMemory() {
-  const memory = safeJsonParse(localStorage.getItem(scopedMemoryKey()), {});
+  const memory = readJsonKey(scopedMemoryKey(), {});
+
   if (!memory || typeof memory !== "object") {
     return {
       profile: {},
@@ -248,7 +414,7 @@ export function saveMemory(memory) {
     updatedAt: Date.now(),
   };
 
-  localStorage.setItem(scopedMemoryKey(), JSON.stringify(safeMemory));
+  writeJsonKey(scopedMemoryKey(), safeMemory);
   return safeMemory;
 }
 
@@ -279,7 +445,9 @@ export function updateMemoryFromMessage(messageText) {
     memory.profile.classLevel = capText(classMatch[2], 30);
   }
 
-  const toneMatch = text.match(/\b(use|prefer)\s+(simple|friendly|formal|short|long)\s+(answers|response|responses)?/i);
+  const toneMatch = text.match(
+    /\b(use|prefer)\s+(simple|friendly|formal|short|long)\s+(answers|response|responses)?/i
+  );
   if (toneMatch) {
     memory.preferences.tone = toneMatch[2].toLowerCase();
   }
@@ -364,7 +532,7 @@ export function buildMemoryPrompt() {
 
 export function clearMemory() {
   try {
-    localStorage.removeItem(scopedMemoryKey());
+    safeStorageRemove(getDataStorage(), scopedMemoryKey());
   } catch (error) {
     console.warn("Could not clear memory", error);
   }
