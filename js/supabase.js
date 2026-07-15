@@ -6,9 +6,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // PASSSABI AI SUPABASE SETTINGS
 // ==============================
 
-const SUPABASE_URL = "https://ryfjziuynqhyfrsqiqmq.supabase.co";
+const SUPABASE_URL = "https://ryfjziuynqhyfrsqiqmq.supabase.co/rest/v1/";
 
-const SUPABASE_ANON_KEY = "PASTE_YOUR_PUBLISHABLE_KEY_HERE";
+const SUPABASE_ANON_KEY = "sb_publishable_Ca_4_AhaSQJX69-M_AsIuQ_rHRcUxVU";
 
 // Create Supabase client
 export const supabase = createClient(
