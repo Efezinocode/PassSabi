@@ -18,23 +18,22 @@ function normalizeText(value) {
 
 export function extractSseData(block) {
   const text = normalizeText(block);
-  if (!text.trim()) return "";
+  if (!text) return "";
 
   const lines = text.split("\n");
   const dataLines = [];
 
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("data:")) continue;
+    if (!line.startsWith("data:")) continue;
 
-    let value = trimmed.slice(5);
+    let value = line.slice(5);
     if (value.startsWith(" ")) value = value.slice(1);
 
     if (value === "[DONE]") continue;
     dataLines.push(value);
   }
 
-  return dataLines.join("\n").trim();
+  return dataLines.join("\n");
 }
 
 function decodeChunk(buffer, chunk) {
@@ -157,7 +156,7 @@ export async function streamChatReply({
             "";
         }
 
-        if (chunkText) {
+        if (chunkText !== "") {
           fullText += String(chunkText);
           if (onChunk) onChunk(fullText);
         }
@@ -179,7 +178,7 @@ export async function streamChatReply({
               ""
             : tail;
 
-        if (tailText) {
+        if (tailText !== "") {
           fullText += String(tailText);
           if (onChunk) onChunk(fullText);
         }
@@ -213,7 +212,9 @@ export async function retryStreamChatReply(options = {}) {
       if (onError) onError(error, attempt);
 
       if (attempt < retries) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
+        await new Promise((resolve) =>
+          setTimeout(resolve, retryDelayMs * (attempt + 1))
+        );
         continue;
       }
     }
@@ -229,4 +230,4 @@ export function stopStream(controller) {
   } catch {
     // ignore
   }
-      }
+}
