@@ -1,270 +1,435 @@
 // api/providers.js
+const OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+const XAI_ENDPOINT = "https://api.x.ai/v1/chat/completions";
+const GEMINI_ENDPOINT_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-function buildProviderOrder(requestedProvider) {
-  const baseOrder = ["groq", "grok", "gemini"];
+const DEFAULT_PROVIDER_ORDER = ["openai", "groq", "xai", "gemini"];
 
-  if (!requestedProvider || !baseOrder.includes(requestedProvider)) {
-    return baseOrder;
+function cleanText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function getEnv(name, fallback = "") {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function toBool(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(v)) return true;
+    if (["0", "false", "no", "off"].includes(v)) return false;
+  }
+  return fallback;
+}
+
+function normalizeMessages(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+
+  return list
+    .map((msg) => {
+      const role =
+        msg?.role === "assistant" ||
+        msg?.role === "system" ||
+        msg?.role === "developer" ||
+        msg?.role === "user"
+          ? msg.role
+          : "user";
+
+      const content =
+        typeof msg?.content === "string"
+          ? msg.content
+          : typeof msg?.text === "string"
+            ? msg.text
+            : "";
+
+      return {
+        role,
+        content: cleanText(content),
+      };
+    })
+    .filter((msg) => msg.content);
+}
+
+function buildProviderOrder(preferredProvider = "openai") {
+  const preferred = cleanText(preferredProvider || "openai").toLowerCase();
+
+  const order = [
+    "openai",
+    ...DEFAULT_PROVIDER_ORDER.filter((provider) => provider !== "openai"),
+  ];
+
+  if (preferred && order.includes(preferred)) {
+    return [preferred, ...order.filter((p) => p !== preferred)];
   }
 
-  return [requestedProvider, ...baseOrder.filter((p) => p !== requestedProvider)];
+  return order;
 }
 
-async function runProvider(provider, message, systemInstruction, onChunk, signal) {
-  if (provider === "groq") return callGroq(message, systemInstruction, onChunk, signal);
-  if (provider === "grok") return callGrok(message, systemInstruction, onChunk, signal);
-  if (provider === "gemini") return callGemini(message, systemInstruction, onChunk, signal);
-  throw new Error(`Unknown provider: ${provider}`);
+function extractResponseText(data) {
+  if (!data) return "";
+
+  if (typeof data.output_text === "string" && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  const output = Array.isArray(data.output) ? data.output : [];
+  const parts = [];
+
+  for (const item of output) {
+    if (item?.type === "message" && Array.isArray(item.content)) {
+      for (const contentItem of item.content) {
+        if (typeof contentItem?.text === "string") {
+          parts.push(contentItem.text);
+        }
+      }
+    }
+  }
+
+  return parts.join("").trim();
 }
 
-async function callGroq(message, systemInstruction, onChunk, signal) {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("Groq API key is missing");
+function extractTextFromOpenAIChatCompletion(data) {
+  const choiceText = data?.choices?.[0]?.message?.content;
 
-  const models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
-  let lastError = null;
+  if (typeof choiceText === "string" && choiceText.trim()) {
+    return choiceText.trim();
+  }
 
-  for (const model of models) {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemInstruction },
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 1024,
-        stream: true,
-      }),
-      signal,
+  if (Array.isArray(choiceText)) {
+    const joined = choiceText
+      .map((part) => (typeof part?.text === "string" ? part.text : ""))
+      .join("")
+      .trim();
+    if (joined) return joined;
+  }
+
+  return "";
+}
+
+function extractTextFromGeminiResponse(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+
+  return parts
+    .map((part) => (typeof part?.text === "string" ? part.text : ""))
+    .join("")
+    .trim();
+}
+
+async function safeJsonResponse(res) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function createFetchError(provider, response, data) {
+  const status = response ? `${response.status} ${response.statusText}` : "Unknown error";
+  const apiMessage =
+    data?.error?.message ||
+    data?.message ||
+    data?.error ||
+    data?.detail ||
+    data?.msg ||
+    "Unknown provider error";
+
+  return new Error(`${provider} failed: ${status} — ${apiMessage}`);
+}
+
+function buildOpenAIInput(messages, systemPrompt) {
+  const safeMessages = normalizeMessages(messages);
+  const input = [];
+
+  const instructions = cleanText(systemPrompt);
+  if (instructions) {
+    input.push({
+      role: "system",
+      content: instructions,
     });
+  }
 
-    if (!response.ok) {
-      const raw = await response.text().catch(() => "");
-      lastError = new Error(`Groq Error (${model}): ${response.status} ${raw}`);
+  for (const msg of safeMessages) {
+    if (msg.role === "system") {
+      input.push({
+        role: "system",
+        content: msg.content,
+      });
       continue;
     }
 
-    const full = await consumeSseStream(
-      response,
-      (json) => json.choices?.[0]?.delta?.content || "",
-      onChunk,
-      signal
-    );
+    if (msg.role === "developer") {
+      input.push({
+        role: "developer",
+        content: msg.content,
+      });
+      continue;
+    }
 
-    if (full) return full;
-    lastError = new Error(`Groq Error (${model}): no response text found`);
+    input.push({
+      role: msg.role === "assistant" ? "assistant" : "user",
+      content: msg.content,
+    });
   }
 
-  throw lastError || new Error("Groq request failed");
+  return input;
 }
 
-async function callGrok(message, systemInstruction, onChunk, signal) {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) throw new Error("Grok API key is missing");
+async function callOpenAI({
+  messages,
+  systemPrompt,
+  temperature = 0.7,
+  maxTokens = 900,
+  webSearch = false,
+}) {
+  const apiKey = getEnv("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY is missing");
 
-  const response = await fetch("https://api.x.ai/v1/chat/completions", {
+  const model = getEnv("OPENAI_MODEL", "gpt-5.6");
+  const input = buildOpenAIInput(messages, systemPrompt);
+
+  const tools = webSearch ? [{ type: "web_search" }] : undefined;
+
+  const response = await fetch(OPENAI_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "grok-4.3",
-      messages: [
-        { role: "system", content: systemInstruction },
-        { role: "user", content: message },
-      ],
-      temperature: 0.7,
-      max_tokens: 1024,
-      stream: true,
+      model,
+      input,
+      tools,
+      tool_choice: webSearch ? "auto" : "none",
+      temperature,
+      max_output_tokens: maxTokens,
     }),
-    signal,
   });
 
+  const data = await safeJsonResponse(response);
+
   if (!response.ok) {
-    const raw = await response.text().catch(() => "");
-    throw new Error(`Grok Error: ${response.status} ${raw}`);
+    throw createFetchError("OpenAI", response, data);
   }
 
-  const full = await consumeSseStream(
-    response,
-    (json) => json.choices?.[0]?.delta?.content || "",
-    onChunk,
-    signal
-  );
+  const text = extractResponseText(data);
+  if (!text) throw new Error("OpenAI returned an empty response");
 
-  if (!full) throw new Error("Grok Error: no response text found");
-  return full;
+  return {
+    provider: "openai",
+    model,
+    text,
+    raw: data,
+  };
 }
 
-async function callGemini(message, systemInstruction, onChunk, signal) {
-  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Gemini API key is missing");
+async function callOpenAICompatible({
+  providerName,
+  endpoint,
+  apiKey,
+  model,
+  messages,
+  systemPrompt,
+  temperature = 0.7,
+  maxTokens = 900,
+}) {
+  if (!apiKey) throw new Error(`${providerName} API key is missing`);
+
+  const safeMessages = normalizeMessages(messages);
+  const payloadMessages = [];
+
+  const instructions = cleanText(systemPrompt);
+  if (instructions) {
+    payloadMessages.push({ role: "system", content: instructions });
+  }
+
+  for (const msg of safeMessages) {
+    if (msg.role === "system" || msg.role === "developer") {
+      payloadMessages.push({ role: "system", content: msg.content });
+    } else {
+      payloadMessages.push({
+        role: msg.role === "assistant" ? "assistant" : "user",
+        content: msg.content,
+      });
+    }
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: payloadMessages,
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  const data = await safeJsonResponse(response);
+
+  if (!response.ok) {
+    throw createFetchError(providerName, response, data);
+  }
+
+  const text = extractTextFromOpenAIChatCompletion(data);
+  if (!text) throw new Error(`${providerName} returned an empty response`);
+
+  return {
+    provider: providerName.toLowerCase(),
+    model,
+    text,
+    raw: data,
+  };
+}
+
+async function callGemini({
+  messages,
+  systemPrompt,
+  temperature = 0.7,
+  maxTokens = 900,
+}) {
+  const apiKey = getEnv("GEMINI_API_KEY");
+  if (!apiKey) throw new Error("GEMINI_API_KEY is missing");
+
+  const model = getEnv("GEMINI_MODEL", "gemini-2.0-flash");
+  const safeMessages = normalizeMessages(messages);
+  const instructions = cleanText(systemPrompt);
+
+  const contents = safeMessages.map((msg) => ({
+    role: msg.role === "assistant" ? "model" : "user",
+    parts: [{ text: msg.content }],
+  }));
+
+  const body = {
+    contents,
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens,
+    },
+  };
+
+  if (instructions) {
+    body.systemInstruction = {
+      parts: [{ text: instructions }],
+    };
+  }
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${apiKey}`,
+    `${GEMINI_ENDPOINT_BASE}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: message }] }],
-        system_instruction: { parts: [{ text: systemInstruction }] },
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-        },
-      }),
-      signal,
+      body: JSON.stringify(body),
     }
   );
+
+  const data = await safeJsonResponse(response);
 
   if (!response.ok) {
-    const raw = await response.text().catch(() => "");
-    throw new Error(`Gemini Error: ${response.status} ${raw}`);
+    throw createFetchError("Gemini", response, data);
   }
 
-  const full = await consumeSseStream(
-    response,
-    (json) =>
-      json.candidates?.[0]?.content?.parts
-        ?.map((part) => part?.text || "")
-        .join("") || "",
-    onChunk,
-    signal
-  );
+  const text = extractTextFromGeminiResponse(data);
+  if (!text) throw new Error("Gemini returned an empty response");
 
-  if (!full) throw new Error("Gemini Error: no response text found");
-  return full;
+  return {
+    provider: "gemini",
+    model,
+    text,
+    raw: data,
+  };
 }
 
-async function consumeSseStream(response, extractText, onChunk, signal) {
-  if (!response.body) {
-    throw new Error("Missing streaming response body");
-  }
+async function generateReply({
+  messages,
+  systemPrompt = "",
+  provider = "openai",
+  temperature = 0.7,
+  maxTokens = 900,
+  webSearch = false,
+} = {}) {
+  const order = buildProviderOrder(provider);
+  const attempts = [];
+  let lastError = null;
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullText = "";
-
-  try {
-    while (true) {
-      if (signal?.aborted) {
-        throw new DOMException("The operation was aborted.", "AbortError");
-      }
-
-      let result;
-      try {
-        result = await reader.read();
-      } catch (err) {
-        if (fullText.trim()) return fullText.trim();
-        throw err;
-      }
-
-      const { done, value } = result;
-
-      if (value) {
-        buffer += decoder.decode(value, { stream: true });
-      }
-
-      while (true) {
-        const boundary = buffer.indexOf("\n\n");
-        if (boundary === -1) break;
-
-        const block = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
-
-        const data = extractSseData(block);
-        if (!data || data === "[DONE]") continue;
-
-        try {
-          const parsed = JSON.parse(data);
-          const text = extractText(parsed) || "";
-          if (text) {
-            const delta = computeDelta(fullText, text);
-            if (delta) {
-              fullText += delta;
-              if (typeof onChunk === "function") {
-                onChunk(delta);
-              }
-            }
-          }
-        } catch {
-          // ignore parse noise
-        }
-      }
-
-      if (done) break;
-    }
-
-    buffer += decoder.decode();
-
-    if (buffer.trim()) {
-      const data = extractSseData(buffer);
-      if (data && data !== "[DONE]") {
-        try {
-          const parsed = JSON.parse(data);
-          const text = extractText(parsed) || "";
-          if (text) {
-            const delta = computeDelta(fullText, text);
-            if (delta) {
-              fullText += delta;
-              if (typeof onChunk === "function") {
-                onChunk(delta);
-              }
-            }
-          }
-        } catch {
-          // ignore leftover parse noise
-        }
-      }
-    }
-
-    return fullText.trim();
-  } finally {
+  for (const item of order) {
     try {
-      reader.releaseLock();
-    } catch {
-      // ignore
+      let result;
+
+      if (item === "openai") {
+        result = await callOpenAI({
+          messages,
+          systemPrompt,
+          temperature,
+          maxTokens,
+          webSearch,
+        });
+      } else if (item === "groq") {
+        result = await callOpenAICompatible({
+          providerName: "Groq",
+          endpoint: GROQ_ENDPOINT,
+          apiKey: getEnv("GROQ_API_KEY"),
+          model: getEnv("GROQ_MODEL", "llama-3.1-70b-versatile"),
+          messages,
+          systemPrompt,
+          temperature,
+          maxTokens,
+        });
+      } else if (item === "xai") {
+        result = await callOpenAICompatible({
+          providerName: "xAI",
+          endpoint: XAI_ENDPOINT,
+          apiKey: getEnv("XAI_API_KEY"),
+          model: getEnv("XAI_MODEL", "grok-2-latest"),
+          messages,
+          systemPrompt,
+          temperature,
+          maxTokens,
+        });
+      } else if (item === "gemini") {
+        result = await callGemini({
+          messages,
+          systemPrompt,
+          temperature,
+          maxTokens,
+        });
+      } else {
+        throw new Error(`Unknown provider: ${item}`);
+      }
+
+      return {
+        ok: true,
+        provider: result.provider,
+        model: result.model,
+        text: result.text,
+        attempts,
+      };
+    } catch (error) {
+      lastError = error;
+      attempts.push({
+        provider: item,
+        error: error?.message || String(error),
+      });
     }
   }
-}
 
-function extractSseData(block) {
-  const lines = String(block || "").split(/\r?\n/);
-  const dataLines = [];
-
-  for (const line of lines) {
-    if (!line.startsWith("data:")) continue;
-
-    let value = line.slice(5);
-    if (value.startsWith(" ")) value = value.slice(1);
-    dataLines.push(value);
-  }
-
-  return dataLines.length ? dataLines.join("\n") : null;
-}
-
-function computeDelta(currentFullText, incomingText) {
-  const next = String(incomingText || "");
-  if (!next) return "";
-  if (!currentFullText) return next;
-  if (next === currentFullText) return "";
-  if (next.startsWith(currentFullText)) {
-    return next.slice(currentFullText.length);
-  }
-  return next;
+  throw Object.assign(new Error(lastError?.message || "All providers failed"), {
+    attempts,
+  });
 }
 
 module.exports = {
   buildProviderOrder,
-  runProvider,
+  generateReply,
+  callOpenAI,
+  callGemini,
+  toBool,
 };
