@@ -1,12 +1,29 @@
-const { buildProviderOrder, runProvider } = require("./providers");
+// api/chat.js
+// Streams replies in the exact SSE format the frontend expects:
+// data: ...\n\n
+// data: [DONE]\n\n
+
+const { buildProviderOrder, runProvider } = require("./providers.js");
+
+const SYSTEM_INSTRUCTION = `
+You are PassSabi AI, a friendly AI teacher for students in Nigeria.
+
+Teach clearly, step by step, using simple words.
+Be helpful, accurate, and calm.
+Use examples when helpful.
+If the student asks for exam help, answer in an exam-friendly way.
+Do not mention policies unless the student asks.
+`.trim();
 
 function parseBody(req) {
-  if (!req || req.body == null) return {};
-  if (typeof req.body === "object") return req.body;
+  const body = req.body;
 
-  if (typeof req.body === "string") {
+  if (!body) return {};
+  if (typeof body === "object") return body;
+
+  if (typeof body === "string") {
     try {
-      return JSON.parse(req.body || "{}");
+      return JSON.parse(body);
     } catch {
       return {};
     }
@@ -15,193 +32,165 @@ function parseBody(req) {
   return {};
 }
 
-function sendSseEvent(res, payload) {
-  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+function sendSseHeaders(res) {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 }
 
-function cleanText(value) {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
+function writeSseData(res, data) {
+  const text = String(data ?? "");
 
-function truncateText(value, max = 220) {
-  const text = cleanText(value);
-  if (text.length <= max) return text;
-  return `${text.slice(0, max).trim()}…`;
-}
-
-function buildConversationContext(history, limit = 8) {
-  if (!Array.isArray(history) || history.length === 0) return "";
-
-  const lines = history
-    .slice(-limit)
-    .map((item) => {
-      const role = item?.role === "assistant" ? "Assistant" : "User";
-      const text = truncateText(item?.text || "", 260);
-      return text ? `${role}: ${text}` : "";
-    })
-    .filter(Boolean);
-
-  return lines.length ? lines.join("\n") : "";
-}
-
-function buildSystemInstruction(memoryContext = "", conversationContext = "") {
-  const base = `
-You are PassSabi AI, a friendly AI teacher for students.
-
-Facts about you:
-- Your name is PassSabi AI.
-- You were founded by Uzezi Great Efezino.
-- You help students with classwork, homework, WAEC, NECO, JAMB, GCE, NABTEB, and other school exams.
-
-Teaching style:
-- Answer like a lesson teacher, not a casual chatbot.
-- Be clear, calm, encouraging, and step by step.
-- Use simple language that students can understand.
-- Keep answers neat and organized.
-- If a list is needed, number items properly as 1., 2., 3. and continue sequentially without restarting at 1.
-- If the user asks for a quiz, give only 3 to 5 questions.
-- If the user asks for an exam, give exactly 30 objective questions, then a theory section.
-- If the user asks for explanations, give short sections, examples, and quick learning tips when useful.
-- Do not greet with a welcome message.
-- Do not say you are under development.
-- Use simple markdown when helpful:
-  - headings
-  - bullet points
-  - numbered lists
-  - short code blocks only when needed
-- Do not overuse symbols.
-- If asked who founded PassSabi AI, answer: Uzezi Great Efezino.
-- If memory shows the user's name or preferences, use them naturally and respectfully.
-`.trim();
-
-  const parts = [base];
-
-  if (memoryContext) {
-    parts.push(`Known user memory:\n${cleanText(memoryContext)}`);
+  if (!text) {
+    res.write("data:\n\n");
+    return;
   }
 
-  if (conversationContext) {
-    parts.push(`Recent conversation context:\n${conversationContext}`);
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  for (const line of lines) {
+    res.write(`data: ${line}\n`);
+  }
+  res.write("\n");
+}
+
+function writeSseDone(res) {
+  res.write("data: [DONE]\n\n");
+}
+
+function writeSseError(res, message) {
+  writeSseData(res, message || "Something went wrong.");
+  writeSseDone(res);
+}
+
+function normalizeMessage(message) {
+  if (Array.isArray(message)) {
+    return message.join("\n\n").trim();
+  }
+  return String(message ?? "").trim();
+}
+
+function isAbortError(error) {
+  return (
+    error?.name === "AbortError" ||
+    String(error?.message || "").toLowerCase().includes("aborted")
+  );
+}
+
+async function streamWithProviders({ message, provider, onChunk }) {
+  const providerOrder = buildProviderOrder(provider);
+  let lastError = null;
+
+  for (const name of providerOrder) {
+    try {
+      let fullText = "";
+
+      const maybeResult = await runProvider(
+        name,
+        message,
+        SYSTEM_INSTRUCTION,
+        (chunk) => {
+          if (chunk == null) return;
+
+          const chunkText = String(chunk);
+
+          // If the provider sends incremental chunks, accumulate them.
+          // If it sends a full replacement each time, use the latest value.
+          if (chunkText.length >= fullText.length && chunkText.startsWith(fullText)) {
+            fullText = chunkText;
+          } else {
+            fullText += chunkText;
+          }
+
+          onChunk(fullText);
+        }
+      );
+
+      if (typeof maybeResult === "string" && maybeResult.trim()) {
+        fullText = maybeResult;
+        onChunk(fullText);
+      }
+
+      return { provider: name, text: fullText };
+    } catch (error) {
+      lastError = error;
+      if (isAbortError(error)) {
+        throw error;
+      }
+    }
   }
 
-  return parts.join("\n\n");
+  throw lastError || new Error("No provider available.");
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed" });
+  if (req.method === "OPTIONS") {
+    sendSseHeaders(res);
+    res.statusCode = 204;
+    return res.end();
   }
 
+  if (req.method !== "POST") {
+    res.statusCode = 405;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    return res.end(JSON.stringify({ error: "Method not allowed" }));
+  }
+
+  const body = parseBody(req);
+  const message = normalizeMessage(body.message);
+  const provider = body.provider ? String(body.provider).trim() : "";
+
+  if (!message) {
+    res.statusCode = 400;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    return res.end(JSON.stringify({ error: "Message is required." }));
+  }
+
+  sendSseHeaders(res);
+
+  // Important for some serverless runtimes
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+
+  let clientClosed = false;
+
+  req.on("close", () => {
+    clientClosed = true;
+  });
+
   try {
-    const body = parseBody(req);
+    const result = await streamWithProviders({
+      message,
+      provider,
+      onChunk: (text) => {
+        if (clientClosed) return;
+        writeSseData(res, text);
+      },
+    });
 
-    const message = typeof body.message === "string" ? body.message.trim() : "";
-    const requestedProvider =
-      typeof body.provider === "string"
-        ? body.provider.trim().toLowerCase()
-        : "";
-    const memoryContext = typeof body.memory === "string" ? body.memory.trim() : "";
-    const history = Array.isArray(body.history) ? body.history : [];
-
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
-    }
-
-    const systemInstruction = buildSystemInstruction(
-      memoryContext,
-      buildConversationContext(history)
-    );
-    const providerOrder = buildProviderOrder(requestedProvider);
-
-    res.status(200);
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-
-    if (typeof res.flushHeaders === "function") {
-      res.flushHeaders();
-    }
-
-    let finished = false;
-
-    for (const provider of providerOrder) {
-      let emittedAnyChunk = false;
-
-      try {
-        sendSseEvent(res, { status: "thinking", provider });
-
-        const text = await runProvider(provider, message, systemInstruction, (chunk) => {
-          if (chunk == null || finished) return;
-
-          emittedAnyChunk = true;
-          sendSseEvent(res, {
-            chunk: String(chunk),
-            provider,
-          });
-        });
-
-        if (finished) return res.end();
-
-        const finalText = typeof text === "string" ? text.trim() : "";
-
-        if (finalText) {
-          if (!emittedAnyChunk) {
-            sendSseEvent(res, {
-              chunk: finalText,
-              provider,
-            });
-          }
-
-          sendSseEvent(res, {
-            done: true,
-            provider,
-          });
-
-          finished = true;
-          return res.end();
-        }
-      } catch (err) {
-        console.error(`${provider} failed:`, err);
-
-        if (emittedAnyChunk && !finished) {
-          sendSseEvent(res, {
-            error: `Stream interrupted from ${provider}. ${
-              err?.message || "Unknown error"
-            }`,
-            provider,
-          });
-          finished = true;
-          return res.end();
-        }
+    if (!clientClosed) {
+      // Make sure the frontend gets the final text at least once.
+      if (result?.text) {
+        writeSseData(res, result.text);
       }
-    }
-
-    if (!finished) {
-      sendSseEvent(res, {
-        error: "All providers failed. Please try again later.",
-      });
-      return res.end();
+      writeSseDone(res);
     }
 
     return res.end();
   } catch (error) {
-    console.error("PassSabi Error:", error);
+    if (clientClosed) return;
 
-    if (res.headersSent) {
-      try {
-        sendSseEvent(res, {
-          error: error?.message || "Server error. Please try again.",
-        });
-      } catch (writeErr) {
-        console.error("Failed to write stream error:", writeErr);
-      }
-      return res.end();
-    }
+    const safeMessage = isAbortError(error)
+      ? "Request was cancelled."
+      : error?.message || "Something went wrong.";
 
-    return res.status(500).json({
-      error: error?.message || "Server error. Please try again.",
-    });
+    // If streaming never produced good text, send a final message and end cleanly.
+    writeSseError(res, safeMessage);
+    return res.end();
   }
 };
