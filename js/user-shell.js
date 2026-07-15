@@ -1,3 +1,4 @@
+// js/user-shell.js
 import { currentUser, clearSession, syncAuthState } from "./auth.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -27,10 +28,5 @@ document.addEventListener("DOMContentLoaded", async () => {
       clearSession();
       window.location.replace("guest-chat.html");
     });
-  });
-
-  history.pushState(null, "", window.location.href);
-  window.addEventListener("popstate", () => {
-    history.pushState(null, "", window.location.href);
   });
 });
