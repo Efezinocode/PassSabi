@@ -1,6 +1,8 @@
-import { currentUser, clearSession } from "./auth.js";
+import { currentUser, clearSession, syncAuthState } from "./auth.js";
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  await syncAuthState();
+
   const user = currentUser();
 
   const topbarAuth = document.getElementById("topbarAuth");
