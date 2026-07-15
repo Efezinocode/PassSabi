@@ -247,17 +247,14 @@ async function initSignup() {
 
     showNotice(
       notice,
-      "🎉 Account created successfully!\n\nPlease check your email inbox (or Spam/Junk folder) and click the verification link to confirm your email before logging in.",
+      "Account created. Check your email to confirm your account.",
       "success"
     );
+    window.location.replace(
+      `${LOGIN_PAGE}?message=${encodeURIComponent("Account created. Please log in.")}`
+    );
 
-    setTimeout(() => {
-      window.location.replace(
-        `${LOGIN_PAGE}?message=${encodeURIComponent(
-          "Please verify your email first. Check your inbox."
-        )}`
-      );
-    }, 3500);
+    
 
 
 async function initForgotPassword() {
