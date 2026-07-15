@@ -169,7 +169,7 @@ a.button {
   letter-spacing: -0.04em;
 }
 
-.hero p {
+.hero-text {
   margin: 0 0 20px;
   color: #cbd5e1;
   line-height: 1.7;
@@ -228,7 +228,7 @@ a.button {
 
 .stat strong {
   display: block;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   margin-bottom: 4px;
 }
 
@@ -284,15 +284,27 @@ a.button {
 }
 
 .preview-window {
-  min-height: 320px;
+  min-height: 340px;
   border-radius: 22px;
   background: #050816;
   border: 1px solid rgba(148, 163, 184, 0.12);
   padding: 18px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: 16px;
+}
+
+.preview-top {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.preview-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
 }
 
 .preview-bubble {
@@ -300,6 +312,7 @@ a.button {
   padding: 12px 14px;
   border-radius: 18px;
   line-height: 1.6;
+  font-size: 0.95rem;
 }
 
 .preview-bubble.user {
@@ -315,6 +328,7 @@ a.button {
 }
 
 .preview-input {
+  margin-top: auto;
   padding: 12px 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.05);
@@ -326,6 +340,7 @@ a.button {
   margin-top: 20px;
   color: var(--muted);
   font-size: 0.92rem;
+  line-height: 1.7;
 }
 
 @media (max-width: 900px) {
@@ -364,4 +379,4 @@ a.button {
   .hero h1 {
     font-size: clamp(2rem, 10vw, 3rem);
   }
-  }
+}
