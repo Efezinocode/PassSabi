@@ -9,6 +9,177 @@ const FORGOT_PAGE = "forgot-password.html";
 const PROFILE_PAGE = "profile.html";
 const RESET_PAGE = "reset-password.html";
 
+const AUTH_SESSION_KEY = "passsabi_session_v1";
+const AUTH_USER_KEY = "passsabi_user_v1";
+const REMEMBER_ME_KEY = "passsabi_remember_me";
+
+let authReadyPromise = null;
+let authSubscription = null;
+
+function readJson(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key, value) {
+  try {
+    if (value == null) {
+      localStorage.removeItem(key);
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn(`Could not write ${key}`, error);
+  }
+}
+
+function clearAuthCache() {
+  try {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+  } catch (error) {
+    console.warn("Could not clear auth cache", error);
+  }
+
+  window.__passsabiAuthSession = null;
+  window.__passsabiAuthUser = null;
+
+  window.dispatchEvent(
+    new CustomEvent("passsabi:auth-changed", {
+      detail: { session: null, user: null },
+    })
+  );
+}
+
+function toCachedUser(user) {
+  if (!user || typeof user !== "object") return null;
+
+  return {
+    id: user.id || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    created_at: user.created_at || "",
+    updated_at: user.updated_at || "",
+    last_sign_in_at: user.last_sign_in_at || "",
+    email_confirmed_at: user.email_confirmed_at || "",
+    confirmed_at: user.confirmed_at || "",
+    user_metadata: user.user_metadata || {},
+    app_metadata: user.app_metadata || {},
+    identities: Array.isArray(user.identities) ? user.identities : [],
+    aud: user.aud || "",
+    role: user.role || "",
+    fullName:
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.user_metadata?.fullName ||
+      "",
+  };
+}
+
+function cacheAuthState(session) {
+  const safeSession = session && typeof session === "object" ? session : null;
+  const safeUser = safeSession?.user ? toCachedUser(safeSession.user) : null;
+
+  if (safeSession) {
+    window.__passsabiAuthSession = safeSession;
+    writeJson(AUTH_SESSION_KEY, safeSession);
+  } else {
+    window.__passsabiAuthSession = null;
+    writeJson(AUTH_SESSION_KEY, null);
+  }
+
+  if (safeUser) {
+    window.__passsabiAuthUser = safeUser;
+    writeJson(AUTH_USER_KEY, safeUser);
+  } else if (!safeSession) {
+    window.__passsabiAuthUser = null;
+    writeJson(AUTH_USER_KEY, null);
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("passsabi:auth-changed", {
+      detail: { session: safeSession, user: safeUser },
+    })
+  );
+
+  return { session: safeSession, user: safeUser };
+}
+
+async function readSessionFromSupabase() {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn("Supabase session read failed:", error);
+      return null;
+    }
+    return data?.session || null;
+  } catch (error) {
+    console.warn("Supabase session read failed:", error);
+    return null;
+  }
+}
+
+async function ensureAuthReady() {
+  if (authReadyPromise) return authReadyPromise;
+
+  authReadyPromise = (async () => {
+    const session = await readSessionFromSupabase();
+    cacheAuthState(session);
+
+    if (!authSubscription) {
+      const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        cacheAuthState(nextSession || null);
+      });
+      authSubscription = data?.subscription || null;
+    }
+
+    return session;
+  })();
+
+  return authReadyPromise;
+}
+
+function getStoredUser() {
+  return window.__passsabiAuthUser || readJson(AUTH_USER_KEY, null) || null;
+}
+
+function getStoredSession() {
+  return window.__passsabiAuthSession || readJson(AUTH_SESSION_KEY, null) || null;
+}
+
+function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim().toLowerCase());
+}
+
+function getNextUrl(defaultUrl = "user-chat.html") {
+  const params = new URLSearchParams(window.location.search);
+  const next = params.get("next");
+  if (!next) return defaultUrl;
+
+  const safeNext = next.trim();
+  if (!safeNext) return defaultUrl;
+  if (/^https?:\/\//i.test(safeNext)) return defaultUrl;
+  return safeNext;
+}
+
+function getRedirectUrl(path) {
+  return new URL(path, window.location.origin).toString();
+}
+
+function getInitials(nameOrEmail) {
+  const source = String(nameOrEmail || "P").trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${(parts[0][0] || "P")}${(parts[1][0] || "S")}`.toUpperCase();
+  }
+  return (source.slice(0, 2) || "P").toUpperCase();
+}
+
 function showNotice(el, message, type = "info") {
   if (!el) return;
   el.className = `notice show ${type}`;
@@ -28,36 +199,49 @@ function setBusy(btn, busy, busyText) {
   btn.textContent = busy ? busyText : btn.dataset.defaultText;
 }
 
-function getNextUrl(defaultUrl = "user-chat.html") {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("next") || defaultUrl;
+export function currentUser() {
+  return getStoredUser();
 }
 
-function getRedirectUrl(path) {
-  return new URL(path, window.location.origin).toString();
+export function getAuthSession() {
+  return getStoredSession();
 }
 
-function isEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim().toLowerCase());
+export function isLoggedIn() {
+  return !!currentUser();
 }
 
-function getInitials(nameOrEmail) {
-  const source = String(nameOrEmail || "P").trim();
-  const parts = source.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return `${(parts[0][0] || "P")}${(parts[1][0] || "S")}`.toUpperCase();
+export async function syncAuthState() {
+  await ensureAuthReady();
+  return getStoredSession();
+}
+
+export async function clearSession(redirectTo = null) {
+  clearAuthCache();
+
+  try {
+    localStorage.removeItem(REMEMBER_ME_KEY);
+  } catch {
+    // ignore
   }
-  return (source.slice(0, 2) || "P").toUpperCase();
-}
 
-async function getCurrentAuthUser() {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) return null;
-  return data?.user || null;
+  try {
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.warn("Supabase sign out failed:", error);
+  }
+
+  if (redirectTo) {
+    window.location.replace(redirectTo);
+  }
 }
 
 async function requireAuth(redirectTo = `${LOGIN_PAGE}?next=${encodeURIComponent(PROFILE_PAGE)}`) {
-  const user = await getCurrentAuthUser();
+  const cached = currentUser();
+  if (cached) return cached;
+
+  await ensureAuthReady();
+  const user = currentUser();
   if (!user) {
     window.location.replace(redirectTo);
     return null;
@@ -65,11 +249,11 @@ async function requireAuth(redirectTo = `${LOGIN_PAGE}?next=${encodeURIComponent
   return user;
 }
 
-async function renderAuthHeader() {
-  const user = await getCurrentAuthUser();
+function renderAuthHeader() {
+  const user = currentUser();
 
   document.querySelectorAll("[data-auth-label]").forEach((node) => {
-    node.textContent = user ? (user.user_metadata?.full_name || user.email || "User") : "Guest";
+    node.textContent = user ? (user.fullName || user.email || "User") : "Guest";
   });
 
   document.querySelectorAll("[data-auth-email]").forEach((node) => {
@@ -89,8 +273,7 @@ async function renderAuthHeader() {
     node.dataset.bound = "true";
     node.addEventListener("click", async (e) => {
       e.preventDefault();
-      await supabase.auth.signOut();
-      window.location.replace(`${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`);
+      await clearSession(`${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`);
     });
   });
 }
@@ -128,6 +311,7 @@ async function initLogin() {
   if (params.get("message")) {
     showNotice(notice, params.get("message"), "success");
   }
+
   if (params.get("email") && $("loginEmail")) {
     $("loginEmail").value = params.get("email");
   }
@@ -151,22 +335,24 @@ async function initLogin() {
 
     setBusy(btn, true, "Logging in...");
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    setBusy(btn, false);
+
     if (error) {
-      setBusy(btn, false);
       showNotice(notice, error.message, "error");
       return;
     }
 
-    // Supabase manages the session; this checkbox is kept for UI compatibility.
+    cacheAuthState(data?.session || null);
+
     if (rememberMe) {
-      localStorage.setItem("passsabi_remember_me", "true");
+      localStorage.setItem(REMEMBER_ME_KEY, "true");
     } else {
-      localStorage.removeItem("passsabi_remember_me");
+      localStorage.removeItem(REMEMBER_ME_KEY);
     }
 
     showNotice(notice, "Login successful. Redirecting...", "success");
@@ -177,7 +363,7 @@ async function initLogin() {
 async function initSignup() {
   const form = $("signupForm");
   if (!form || form.dataset.bound === "true") return;
-  form.dataset.bound = true;
+  form.dataset.bound = "true";
 
   const notice = $("signupNotice");
   const btn = $("signupBtn");
@@ -194,81 +380,70 @@ async function initSignup() {
     const fullName = $("fullName")?.value?.trim();
     const email = $("signupEmail")?.value?.trim();
     const password = $("signupPassword")?.value || "";
-    const confirmPassword = $("confirmPassword")?.value || "";
-    const termsAccepted = !!$("terms")?.checked;
+    const confirm = $("confirmPassword")?.value || "";
 
-    if (!fullName || !email || !password || !confirmPassword) {
-      showNotice(notice, "Please fill in all fields.", "error");
+    if (!fullName || !email || !password || !confirm) {
+      showNotice(notice, "Fill in all fields.", "error");
       return;
     }
     if (!isEmail(email)) {
       showNotice(notice, "Enter a valid email address.", "error");
       return;
     }
-    if (password.length < 6) {
-      showNotice(notice, "Password must be at least 6 characters.", "error");
+    if (password.length < 8) {
+      showNotice(notice, "Password must be at least 8 characters.", "error");
       return;
     }
-    if (password !== confirmPassword) {
+    if (password !== confirm) {
       showNotice(notice, "Passwords do not match.", "error");
-      return;
-    }
-    if (!termsAccepted) {
-      showNotice(notice, "You need to accept the terms.", "error");
       return;
     }
 
     setBusy(btn, true, "Creating account...");
 
+    const redirectTo = getRedirectUrl(`${RESET_PAGE}?source=signup`);
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo: redirectTo,
         data: {
           full_name: fullName,
         },
-        emailRedirectTo: getRedirectUrl(LOGIN_PAGE),
       },
     });
 
+    setBusy(btn, false);
+
     if (error) {
-      setBusy(btn, false);
       showNotice(notice, error.message, "error");
       return;
     }
 
-    setBusy(btn, false);
+    cacheAuthState(data?.session || null);
 
-    if (data?.user && data?.session) {
-      showNotice(notice, "Account created successfully. Redirecting...", "success");
-      window.location.replace(getRedirectUrl(PROFILE_PAGE));
+    if (data?.session) {
+      showNotice(notice, "Account created. Redirecting...", "success");
+      window.location.replace(getNextUrl("user-chat.html"));
       return;
     }
 
     showNotice(
       notice,
-      "Account created. Check your email to confirm your account.",
+      "Account created. Check your email to verify your account.",
       "success"
     );
-    window.location.replace(
-      `${LOGIN_PAGE}?message=${encodeURIComponent("Account created. Please log in.")}`
-    );
-
-    
-
+  });
+}
 
 async function initForgotPassword() {
-  const form = $("forgotPasswordForm");
+  const form = $("forgotForm");
   if (!form || form.dataset.bound === "true") return;
-  form.dataset.bound = true;
+  form.dataset.bound = "true";
 
   const notice = $("forgotNotice");
   const btn = $("forgotBtn");
-  const params = new URLSearchParams(window.location.search);
-
-  if (params.get("email") && $("forgotEmail")) {
-    $("forgotEmail").value = params.get("email");
-  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -284,128 +459,164 @@ async function initForgotPassword() {
       return;
     }
 
-    setBusy(btn, true, "Sending...");
+    setBusy(btn, true, "Sending reset link...");
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getRedirectUrl(RESET_PAGE),
+      redirectTo: getRedirectUrl(`${RESET_PAGE}?email=${encodeURIComponent(email)}`),
     });
 
+    setBusy(btn, false);
+
     if (error) {
-      setBusy(btn, false);
       showNotice(notice, error.message, "error");
       return;
     }
 
-    setBusy(btn, false);
-    showNotice(notice, "Password reset email sent. Check your inbox.", "success");
+    showNotice(notice, "Password reset link sent. Check your email.", "success");
   });
 }
 
 async function initResetPassword() {
-  const form = $("resetPasswordForm");
+  const form = $("resetForm");
   if (!form || form.dataset.bound === "true") return;
-  form.dataset.bound = true;
+  form.dataset.bound = "true";
 
   const notice = $("resetNotice");
   const btn = $("resetBtn");
+  const params = new URLSearchParams(window.location.search);
 
-  // Supabase recovery links may arrive with a PASSWORD_RECOVERY event.
-  supabase.auth.onAuthStateChange((event) => {
-    if (event === "PASSWORD_RECOVERY" && notice) {
-      showNotice(notice, "Enter your new password below.", "info");
-    }
-  });
+  if (params.get("email") && $("resetEmail")) {
+    $("resetEmail").value = params.get("email");
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     clearNotice(notice);
 
-    const password = $("newPassword")?.value || "";
-    const confirmPassword = $("confirmNewPassword")?.value || "";
+    const password = $("resetPassword")?.value || "";
+    const confirm = $("resetConfirmPassword")?.value || "";
 
-    if (!password || !confirmPassword) {
-      showNotice(notice, "Fill in both password fields.", "error");
+    if (password.length < 8) {
+      showNotice(notice, "Password must be at least 8 characters.", "error");
       return;
     }
-    if (password.length < 6) {
-      showNotice(notice, "Password must be at least 6 characters.", "error");
-      return;
-    }
-    if (password !== confirmPassword) {
+    if (password !== confirm) {
       showNotice(notice, "Passwords do not match.", "error");
       return;
     }
 
-    setBusy(btn, true, "Updating...");
+    setBusy(btn, true, "Updating password...");
 
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await supabase.auth.updateUser({
+      password,
+    });
+
+    setBusy(btn, false);
 
     if (error) {
-      setBusy(btn, false);
       showNotice(notice, error.message, "error");
       return;
     }
 
-    setBusy(btn, false);
-    showNotice(notice, "Password updated successfully.", "success");
-    window.location.replace(
-      `${LOGIN_PAGE}?message=${encodeURIComponent("Password updated. Please log in.")}`
-    );
+    showNotice(notice, "Password updated. Redirecting to login...", "success");
+    setTimeout(() => {
+      window.location.replace(LOGIN_PAGE);
+    }, 1000);
   });
 }
 
 async function initProfile() {
-  const badge = $("currentUserBadge");
-  const currentUserName = $("currentUserName");
-  const currentUserEmail = $("currentUserEmail");
-  const profileName = $("profileName");
-  const profileEmail = $("profileEmail");
-  const profileStatus = $("profileStatus");
-  const profileJoined = $("profileJoined");
-  const logoutBtn = $("logoutBtn");
-
-  const needsProfile =
-    badge || currentUserName || currentUserEmail || profileName || profileEmail || profileStatus || profileJoined || logoutBtn;
-
-  if (!needsProfile) return;
-
-  const user = await requireAuth(`${LOGIN_PAGE}?next=${encodeURIComponent(PROFILE_PAGE)}`);
+  const user = await requireAuth();
   if (!user) return;
 
-  const fullName = user.user_metadata?.full_name || user.email || "PassSabi User";
-  const initials = getInitials(fullName);
+  const form = $("profileForm");
+  const notice = $("profileNotice");
+  const btn = $("profileBtn");
 
-  if (badge) badge.textContent = initials;
-  if (currentUserName) currentUserName.textContent = fullName;
-  if (currentUserEmail) currentUserEmail.textContent = user.email || "";
-  if (profileName) profileName.textContent = fullName;
-  if (profileEmail) profileEmail.textContent = user.email || "";
-  if (profileStatus) profileStatus.textContent = user.email_confirmed_at ? "Verified" : "Not verified";
-  if (profileJoined) {
-    profileJoined.textContent = new Date(user.created_at).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  }
+  const profileName = $("profileName");
+  const profileEmail = $("profileEmail");
+  const profileInitials = $("profileInitials");
+  const profilePlan = $("profilePlan");
+  const profileCoins = $("profileCoins");
 
-  if (logoutBtn && logoutBtn.dataset.bound !== "true") {
-    logoutBtn.dataset.bound = "true";
-    logoutBtn.addEventListener("click", async () => {
-      await supabase.auth.signOut();
-      window.location.replace(`${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`);
+  const name = user.fullName || user.user_metadata?.full_name || user.email || "User";
+  if (profileName) profileName.value = name;
+  if (profileEmail) profileEmail.value = user.email || "";
+  if (profileInitials) profileInitials.textContent = getInitials(name);
+
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("plan,coins,avatar_url,full_name,email")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profilePlan) profilePlan.textContent = profileRow?.plan || "free";
+  if (profileCoins) profileCoins.textContent = String(profileRow?.coins ?? 0);
+
+  if (!form || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearNotice(notice);
+
+    const newName = profileName?.value?.trim() || "";
+    const avatarUrl = $("profileAvatarUrl")?.value?.trim() || "";
+
+    setBusy(btn, true, "Saving...");
+
+    const updates = {
+      data: {
+        full_name: newName,
+      },
+    };
+
+    const { error: authError } = await supabase.auth.updateUser(updates);
+    if (authError) {
+      setBusy(btn, false);
+      showNotice(notice, authError.message, "error");
+      return;
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: newName,
+        avatar_url: avatarUrl || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id);
+
+    setBusy(btn, false);
+
+    if (profileError) {
+      showNotice(notice, profileError.message, "error");
+      return;
+    }
+
+    cacheAuthState({
+      ...getAuthSession(),
+      user: {
+        ...(getAuthSession()?.user || {}),
+        user_metadata: {
+          ...(getAuthSession()?.user?.user_metadata || {}),
+          full_name: newName,
+        },
+      },
     });
-  }
+
+    showNotice(notice, "Profile updated.", "success");
+  });
 }
 
 async function redirectIfAlreadyLoggedIn() {
-  const path = window.location.pathname.split("/").pop();
-  const user = await getCurrentAuthUser();
-
+  const path = window.location.pathname.split("/").pop() || "";
   const authPages = [LOGIN_PAGE, SIGNUP_PAGE, FORGOT_PAGE];
-  if (user && authPages.includes(path)) {
-    const params = new URLSearchParams(window.location.search);
-    const next = params.get("next") || "user-chat.html";
+  if (!authPages.includes(path)) return false;
+
+  const user = currentUser() || (await syncAuthState());
+  if (user) {
+    const next = getNextUrl("user-chat.html");
     window.location.replace(next);
     return true;
   }
@@ -419,8 +630,7 @@ function wireGenericAuthButtons() {
     node.dataset.bound = "true";
     node.addEventListener("click", async (e) => {
       e.preventDefault();
-      await supabase.auth.signOut();
-      window.location.replace(`${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`);
+      await clearSession(`${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`);
     });
   });
 }
@@ -437,11 +647,17 @@ function initAuthPages() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  await ensureAuthReady();
   if (await redirectIfAlreadyLoggedIn()) return;
   initAuthPages();
 });
 
 window.addEventListener("pageshow", async () => {
+  await ensureAuthReady();
   renderAuthHeader();
   wireGenericAuthButtons();
+});
+
+ensureAuthReady().catch((error) => {
+  console.warn("Auth bootstrap failed:", error);
 });
