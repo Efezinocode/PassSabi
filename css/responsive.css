@@ -1,46 +1,51 @@
 @media (max-width: 900px) {
+  :root {
+    --chat-topbar-height: 72px;
+  }
+
   .chat-container {
     width: 100%;
   }
 
   .chat-bubble {
-    max-width: 88%;
+    max-width: 90%;
+  }
+
+  .lesson-tools {
+    grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   body:not(.chat-page) {
     padding: 18px 12px;
   }
 
-  .container {
-    padding: 18px 14px;
-  }
-
   .chat-topbar {
-    padding: 0 10px;
+    padding: 0 12px;
+    gap: 10px;
   }
 
-  .chat-topbar h2 {
-    font-size: 1rem;
+  .chat-brand-copy strong {
+    font-size: 0.96rem;
+  }
+
+  .chat-brand-copy span {
+    font-size: 0.82rem;
   }
 
   .topbar-login-link {
-    min-width: 74px;
-    height: 38px;
-    padding: 0 14px;
+    min-height: 38px;
+    padding: 0 12px;
     font-size: 0.88rem;
-    border-radius: 12px;
   }
 
   .chat-container {
-    height: calc(100dvh - var(--topbar-height));
-    min-height: calc(100dvh - var(--topbar-height));
-    padding: 0;
+    padding: 0 10px 10px;
   }
 
   .welcome-screen {
-    padding: 20px 12px 10px;
+    padding: 18px 0 10px;
   }
 
   .welcome-card {
@@ -53,24 +58,23 @@
   }
 
   #chat-box {
-    padding: 16px 10px 122px;
-    scroll-padding-bottom: 122px;
+    padding-top: 14px;
+    padding-bottom: 14px;
   }
 
   .chat-footer {
-    width: 100%;
-    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    padding-top: 10px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
 
   .chat-input-wrap {
-    padding: 10px;
+    padding: 8px;
     border-radius: 20px;
   }
 
   #userInput {
     min-height: 48px;
-    padding-left: 12px;
-    padding-right: 56px;
+    padding: 12px 12px;
   }
 
   #sendBtn {
@@ -81,7 +85,7 @@
   }
 
   .chat-bubble {
-    max-width: 92%;
+    max-width: 94%;
     padding: 13px 14px;
     border-radius: 20px;
   }
@@ -93,23 +97,17 @@
   }
 
   .share-menu {
-    width: 100%;
-  }
-
-  .lesson-tools {
-    width: 100%;
-  }
-
-  .lesson-tool-btn {
-    flex: 1 1 100%;
+    width: calc(100vw - 24px);
+    min-width: 0;
   }
 }
 
 @media (max-width: 420px) {
   .menu-button {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    border-radius: 12px;
   }
 
   .history-item-row {
@@ -117,24 +115,19 @@
   }
 
   .history-item-main {
-    padding: 10px 11px;
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
-  .history-menu-btn,
-  .history-rename-btn,
-  .history-pin-btn,
-  .history-delete-btn {
+  .history-menu-btn {
     width: 40px;
     height: 40px;
     min-width: 40px;
+    border-radius: 12px;
   }
 }
 
 @media (hover: none) and (pointer: coarse) {
-  button:hover {
-    transform: none;
-  }
-
   .menu-button:hover,
   .sidebar-action:hover,
   .history-item-main:hover,
