@@ -1,5 +1,6 @@
 // js/auth.js
 import { supabase } from "./supabase.js";
+import { migrateGuestDataToUser } from "./storage.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -102,6 +103,7 @@ function cacheAuthState(session) {
   if (safeUser) {
     window.__passsabiAuthUser = safeUser;
     writeJson(AUTH_USER_KEY, safeUser);
+    migrateGuestDataToUser();
   } else if (!safeSession) {
     window.__passsabiAuthUser = null;
     writeJson(AUTH_USER_KEY, null);
