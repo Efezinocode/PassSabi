@@ -81,6 +81,16 @@ function isAbortError(error) {
   );
 }
 
+function getDeltaText(fullText, previousText) {
+  const current = String(fullText || "");
+  const previous = String(previousText || "");
+
+  if (!previous) return current;
+  if (current.startsWith(previous)) return current.slice(previous.length);
+
+  return current;
+}
+
 async function streamWithProviders({ message, provider, onChunk }) {
   const providerOrder = buildProviderOrder(provider);
   let lastError = null;
@@ -88,6 +98,7 @@ async function streamWithProviders({ message, provider, onChunk }) {
   for (const name of providerOrder) {
     try {
       let fullText = "";
+      let emittedText = "";
 
       const maybeResult = await runProvider(
         name,
@@ -98,21 +109,28 @@ async function streamWithProviders({ message, provider, onChunk }) {
 
           const chunkText = String(chunk);
 
-          // If the provider sends incremental chunks, accumulate them.
-          // If it sends a full replacement each time, use the latest value.
+          // Some providers send cumulative text, some send only the latest delta.
           if (chunkText.length >= fullText.length && chunkText.startsWith(fullText)) {
             fullText = chunkText;
           } else {
             fullText += chunkText;
           }
 
-          onChunk(fullText);
+          const delta = getDeltaText(fullText, emittedText);
+          if (delta) {
+            emittedText = fullText;
+            onChunk(delta);
+          }
         }
       );
 
       if (typeof maybeResult === "string" && maybeResult.trim()) {
         fullText = maybeResult;
-        onChunk(fullText);
+        const delta = getDeltaText(fullText, emittedText);
+        if (delta) {
+          emittedText = fullText;
+          onChunk(delta);
+        }
       }
 
       return { provider: name, text: fullText };
@@ -152,7 +170,6 @@ module.exports = async function handler(req, res) {
 
   sendSseHeaders(res);
 
-  // Important for some serverless runtimes
   if (typeof res.flushHeaders === "function") {
     res.flushHeaders();
   }
@@ -167,17 +184,13 @@ module.exports = async function handler(req, res) {
     const result = await streamWithProviders({
       message,
       provider,
-      onChunk: (text) => {
+      onChunk: (deltaText) => {
         if (clientClosed) return;
-        writeSseData(res, text);
+        writeSseData(res, deltaText);
       },
     });
 
     if (!clientClosed) {
-      // Make sure the frontend gets the final text at least once.
-      if (result?.text) {
-        writeSseData(res, result.text);
-      }
       writeSseDone(res);
     }
 
@@ -189,7 +202,6 @@ module.exports = async function handler(req, res) {
       ? "Request was cancelled."
       : error?.message || "Something went wrong.";
 
-    // If streaming never produced good text, send a final message and end cleanly.
     writeSseError(res, safeMessage);
     return res.end();
   }
