@@ -196,3 +196,10 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
+
+grant usage on schema public to authenticated;
+
+grant select, insert, update, delete on public.profiles to authenticated;
+grant select, insert, update, delete on public.chat_sessions to authenticated;
+grant select, insert, update, delete on public.chat_messages to authenticated;
+grant select, insert, update, delete on public.user_memory to authenticated;
