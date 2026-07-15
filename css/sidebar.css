@@ -2,48 +2,32 @@ body.sidebar-open {
   overflow: hidden;
 }
 
-.chat-topbar {
-  height: 64px;
-  padding: 0 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(15, 23, 42, 0.98);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  position: relative;
-  z-index: 30;
-}
-
-.chat-topbar h2 {
-  margin: 0;
-  font-size: 1.15rem;
-  color: #38bdf8;
-}
-
 .menu-button {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
   padding: 0;
-  border: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
   color: #ffffff;
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: transform 0.18s ease, background 0.18s ease;
 }
 
 .menu-button:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.09);
+  transform: translateY(-1px);
 }
 
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.58);
+  background: rgba(0, 0, 0, 0.56);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
@@ -59,11 +43,13 @@ body.sidebar-open {
   position: fixed;
   top: 0;
   left: 0;
-  width: min(84vw, 320px);
-  max-width: 320px;
+  width: min(84vw, 336px);
+  max-width: 336px;
   height: 100dvh;
-  background: #0f172a;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.10), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(8, 17, 31, 0.98));
+  border-right: 1px solid rgba(148, 163, 184, 0.12);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -73,6 +59,7 @@ body.sidebar-open {
   transition: transform 0.25s ease;
   z-index: 1000;
   overflow-y: auto;
+  box-shadow: 24px 0 70px rgba(0, 0, 0, 0.32);
 }
 
 .sidebar.open {
@@ -94,29 +81,30 @@ body.sidebar-open {
 
 .sidebar-header p {
   margin: 0;
-  font-size: 0.95rem;
-  color: #38bdf8;
+  font-size: 0.94rem;
+  color: #94a3b8;
 }
 
 .sidebar-action {
   width: 100%;
   height: 54px;
-  border: none;
+  border: 1px solid rgba(56, 189, 248, 0.18);
   border-radius: 18px;
-  background: #2563eb;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.98), rgba(14, 165, 233, 0.95));
   color: #ffffff;
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   text-align: left;
   padding: 0 18px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  box-shadow: 0 14px 28px rgba(14, 165, 233, 0.18);
 }
 
 .sidebar-action:hover {
-  background: #1d4ed8;
+  filter: brightness(1.03);
 }
 
 .sidebar-section {
@@ -127,7 +115,7 @@ body.sidebar-open {
 
 .sidebar-section h4 {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: 0.96rem;
   color: rgba(255, 255, 255, 0.82);
 }
 
@@ -153,10 +141,10 @@ body.sidebar-open {
 .history-item-main {
   flex: 1;
   min-width: 0;
-  height: 52px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 52px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: 16px;
-  padding: 0 16px;
+  padding: 0 14px;
   background: rgba(255, 255, 255, 0.04);
   color: #ffffff;
   text-align: left;
@@ -173,7 +161,7 @@ body.sidebar-open {
 }
 
 .history-item-main.active {
-  border-color: rgba(56, 189, 248, 0.55);
+  border-color: rgba(56, 189, 248, 0.44);
   background: rgba(56, 189, 248, 0.12);
 }
 
@@ -183,95 +171,100 @@ body.sidebar-open {
 }
 
 .history-menu-btn {
-  width: 52px;
-  height: 52px;
-  border: none;
-  border-radius: 16px;
-  background: #2563eb;
-  color: #ffffff;
-  font-size: 28px;
-  line-height: 1;
-  cursor: pointer;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+  font-size: 1rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.history-menu-btn:hover {
-  background: #1d4ed8;
+.history-menu-btn:hover,
+.history-menu-btn.active {
+  background: rgba(56, 189, 248, 0.10);
+  border-color: rgba(56, 189, 248, 0.18);
 }
 
 .history-menu {
   position: absolute;
   right: 0;
-  top: 58px;
-  min-width: 165px;
+  top: calc(100% + 8px);
+  width: 190px;
   padding: 8px;
-  border-radius: 16px;
-  background: #111827;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
   display: none;
-  z-index: 9999;
+  z-index: 20;
 }
 
 .history-menu.open {
-  display: block;
+  display: grid;
+  gap: 6px;
 }
 
 .history-menu-item {
   width: 100%;
-  height: 44px;
-  border: none;
+  min-height: 42px;
+  border: 0;
   border-radius: 12px;
+  padding: 0 12px;
   background: transparent;
-  color: #ffffff;
-  font-size: 0.95rem;
-  cursor: pointer;
+  color: #e2e8f0;
+  text-align: left;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  text-align: left;
+  gap: 8px;
 }
 
 .history-menu-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .history-menu-icon {
-  width: 18px;
-  display: inline-flex;
-  justify-content: center;
+  width: 20px;
+  text-align: center;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 2px;
-  width: 100%;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .sidebar-nav a {
-  display: block;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #ffffff;
-  text-decoration: none;
+  min-height: 46px;
+  border-radius: 14px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.10);
   font-weight: 600;
+  text-decoration: none;
 }
 
 .sidebar-nav a:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.16);
 }
 
 .sidebar-footer {
   margin-top: auto;
-  padding-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.sidebar-footer p {
+  margin: 0;
   color: #94a3b8;
   font-size: 0.92rem;
 }
