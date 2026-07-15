@@ -83,13 +83,16 @@ export function normalizeSession(session) {
 }
 
 function readList(key) {
-  const data = safeJsonParse(localStorage.getItem(key), []);
+  const storage = getDataStorage();
+  const data = safeJsonParse(storage.getItem(key), []);
   return Array.isArray(data) ? data : [];
 }
 
 function writeList(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  const storage = getDataStorage();
+  storage.setItem(key, JSON.stringify(value));
 }
+
 
 function scopedSessionKey() {
   return getScopedStorageKey(STORAGE_KEY);
