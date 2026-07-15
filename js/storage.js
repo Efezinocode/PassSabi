@@ -1,7 +1,9 @@
+// js/storage.js
 const STORAGE_KEY = "passsabi_chat_sessions_v1";
 const CURRENT_CHAT_KEY = "passsabi_current_chat_id_v1";
 const LEGACY_MESSAGES_KEY = "passsabi_messages_v1";
 const MEMORY_KEY = "passsabi_memory_v1";
+const AUTH_USER_KEY = "passsabi_user_v1";
 
 function safeJsonParse(value, fallback = null) {
   try {
@@ -25,14 +27,27 @@ function capText(value, max = 120) {
   return text.length > max ? `${text.slice(0, max).trim()}…` : text;
 }
 
-// ==================== NEW: LOGIN CHECK ====================
-export function isLoggedIn() {
-  return !!(
-    localStorage.getItem("passsabi_session_v1") || 
-    sessionStorage.getItem("passsabi_session_v1")
-  );
+function readStoredUser() {
+  const user = safeJsonParse(localStorage.getItem(AUTH_USER_KEY), null);
+  return user && typeof user === "object" ? user : null;
 }
-// ========================================================
+
+export function getActiveUserId() {
+  return String(readStoredUser()?.id || "").trim();
+}
+
+export function getStorageScopeSuffix() {
+  const userId = getActiveUserId();
+  return userId ? `:${userId}` : "";
+}
+
+export function getScopedStorageKey(baseKey) {
+  return `${baseKey}${getStorageScopeSuffix()}`;
+}
+
+export function isLoggedIn() {
+  return !!getActiveUserId();
+}
 
 export function normalizeSession(session) {
   const safeId =
@@ -58,334 +73,286 @@ export function normalizeSession(session) {
   return {
     id: safeId,
     title: safeTitle,
-    messages: safeMessages,
+    pinned: !!session?.pinned,
     createdAt:
       typeof session?.createdAt === "number" ? session.createdAt : Date.now(),
     updatedAt:
       typeof session?.updatedAt === "number" ? session.updatedAt : Date.now(),
-    pinned: Boolean(session?.pinned),
+    messages: safeMessages,
   };
+}
+
+function readList(key) {
+  const data = safeJsonParse(localStorage.getItem(key), []);
+  return Array.isArray(data) ? data : [];
+}
+
+function writeList(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function scopedSessionKey() {
+  return getScopedStorageKey(STORAGE_KEY);
+}
+
+function scopedCurrentChatKey() {
+  return getScopedStorageKey(CURRENT_CHAT_KEY);
+}
+
+function scopedMemoryKey() {
+  return getScopedStorageKey(MEMORY_KEY);
 }
 
 export function createSession(title = "New Chat") {
   return normalizeSession({
     id: makeId("chat"),
     title,
-    messages: [],
+    pinned: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    pinned: false,
+    messages: [],
   });
 }
 
-// Updated: Guests get empty sessions
 export function loadSessions() {
-  if (!isLoggedIn()) return [];
-
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-
-    const parsed = safeJsonParse(raw, []);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((session) => session && session.id && Array.isArray(session.messages))
-      .map((session) => normalizeSession(session));
-  } catch {
-    return [];
-  }
+  const sessions = readList(scopedSessionKey());
+  return sessions.map(normalizeSession).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-// Updated: Only save when logged in
 export function saveSessions(sessions) {
-  if (!isLoggedIn()) return;   // ← Guests never save
-
-  try {
-    const ordered = Array.isArray(sessions)
-      ? sessions.slice().sort((a, b) => {
-          const pinnedA = a?.pinned ? 1 : 0;
-          const pinnedB = b?.pinned ? 1 : 0;
-          if (pinnedA !== pinnedB) return pinnedB - pinnedA;
-          return (b?.updatedAt || 0) - (a?.updatedAt || 0);
-        })
-      : [];
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(ordered));
-  } catch (error) {
-    console.warn("Could not save chat sessions", error);
-  }
+  const safeSessions = Array.isArray(sessions) ? sessions.map(normalizeSession) : [];
+  writeList(scopedSessionKey(), safeSessions);
+  return safeSessions;
 }
 
-// Updated
 export function loadCurrentChatId() {
-  if (!isLoggedIn()) return "";
-  try {
-    return localStorage.getItem(CURRENT_CHAT_KEY) || "";
-  } catch {
-    return "";
-  }
+  const value = localStorage.getItem(scopedCurrentChatKey());
+  return value && String(value).trim() ? String(value).trim() : "";
 }
 
 export function saveCurrentChatId(chatId) {
-  if (!isLoggedIn()) return;
-  try {
-    localStorage.setItem(CURRENT_CHAT_KEY, chatId || "");
-  } catch (error) {
-    console.warn("Could not save current chat id", error);
+  const id = String(chatId || "").trim();
+  if (!id) {
+    localStorage.removeItem(scopedCurrentChatKey());
+    return "";
   }
+  localStorage.setItem(scopedCurrentChatKey(), id);
+  return id;
 }
 
-export function makeSessionTitle(message) {
-  const clean = cleanText(message);
-  if (!clean) return "New Chat";
-  return clean.length > 28 ? `${clean.slice(0, 28).trim()}…` : clean;
+export function makeSessionTitle(text = "") {
+  const cleaned = cleanText(text);
+  if (!cleaned) return "New Chat";
+
+  const words = cleaned.split(" ").filter(Boolean);
+  const title = words.slice(0, 6).join(" ");
+  return capText(title, 48) || "New Chat";
+}
+
+export function migrateGuestDataToUser() {
+  const userId = getActiveUserId();
+  if (!userId) return false;
+
+  const guestSessions = safeJsonParse(localStorage.getItem(STORAGE_KEY), []);
+  const guestCurrent = localStorage.getItem(CURRENT_CHAT_KEY);
+  const guestMemory = safeJsonParse(localStorage.getItem(MEMORY_KEY), null);
+
+  const userSessionsKey = `${STORAGE_KEY}:${userId}`;
+  const userCurrentKey = `${CURRENT_CHAT_KEY}:${userId}`;
+  const userMemoryKey = `${MEMORY_KEY}:${userId}`;
+
+  const existingSessions = safeJsonParse(localStorage.getItem(userSessionsKey), []);
+  const mergedSessions = Array.isArray(existingSessions) && existingSessions.length
+    ? existingSessions
+    : Array.isArray(guestSessions)
+      ? guestSessions
+      : [];
+
+  if (mergedSessions.length) {
+    localStorage.setItem(userSessionsKey, JSON.stringify(mergedSessions.map(normalizeSession)));
+  }
+
+  if (guestCurrent && !localStorage.getItem(userCurrentKey)) {
+    localStorage.setItem(userCurrentKey, String(guestCurrent));
+  }
+
+  if (guestMemory && !localStorage.getItem(userMemoryKey)) {
+    localStorage.setItem(userMemoryKey, JSON.stringify(guestMemory));
+  }
+
+  return true;
 }
 
 export function migrateLegacyMessages() {
-  try {
-    const raw = localStorage.getItem(LEGACY_MESSAGES_KEY);
-    if (!raw) return null;
+  const legacy = safeJsonParse(localStorage.getItem(LEGACY_MESSAGES_KEY), []);
+  if (!Array.isArray(legacy) || !legacy.length) return false;
 
-    const parsed = safeJsonParse(raw, null);
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+  const sessions = loadSessions();
+  const session = createSession("Imported Chat");
 
-    const firstUser = parsed.find(
-      (m) => m && m.role === "user" && typeof m.text === "string"
-    );
+  session.messages = legacy
+    .filter((message) => message && typeof message.text === "string")
+    .map((message) => ({
+      role: message.role === "assistant" ? "assistant" : "user",
+      text: String(message.text),
+      ts: typeof message.ts === "number" ? message.ts : Date.now(),
+    }));
 
-    const title = firstUser ? makeSessionTitle(firstUser.text) : "Imported Chat";
+  session.title = makeSessionTitle(session.messages[0]?.text || "Imported Chat");
+  session.updatedAt = Date.now();
 
-    return normalizeSession({
-      id: makeId("chat"),
-      title,
-      messages: parsed.filter((m) => m && typeof m.text === "string"),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      pinned: false,
-    });
-  } catch {
-    return null;
-  }
+  sessions.unshift(session);
+  saveSessions(sessions);
+  saveCurrentChatId(session.id);
+
+  return true;
 }
 
 export function removeLegacyMessagesKey() {
-  try {
-    localStorage.removeItem(LEGACY_MESSAGES_KEY);
-  } catch (error) {
-    console.warn("Could not remove legacy messages", error);
-  }
-}
-
-function createEmptyMemory() {
-  return {
-    profile: {
-      name: "",
-      examType: "",
-      favoriteSubject: "",
-      school: "",
-      classLevel: "",
-    },
-    preferences: {
-      tone: "friendly",
-      language: "simple",
-      answerLength: "medium",
-    },
-    facts: [],
-    lastUpdated: Date.now(),
-  };
-}
-
-function normalizeFact(fact) {
-  if (!fact || typeof fact !== "object") return null;
-
-  const key = cleanText(fact.key);
-  const value = cleanText(fact.value);
-  if (!key || !value) return null;
-
-  return {
-    id: typeof fact.id === "string" && fact.id.trim() ? fact.id.trim() : makeId("fact"),
-    key,
-    label: cleanText(fact.label) || key,
-    value: capText(value, 120),
-    source: cleanText(fact.source) || "chat",
-    updatedAt: typeof fact.updatedAt === "number" ? fact.updatedAt : Date.now(),
-  };
-}
-
-function normalizeMemory(memory) {
-  const base = createEmptyMemory();
-  if (!memory || typeof memory !== "object") return base;
-
-  const profile =
-    memory.profile && typeof memory.profile === "object" ? memory.profile : {};
-  base.profile.name = capText(profile.name, 60);
-  base.profile.examType = cleanText(profile.examType).toUpperCase();
-  base.profile.favoriteSubject = capText(profile.favoriteSubject, 60);
-  base.profile.school = capText(profile.school, 80);
-  base.profile.classLevel = cleanText(profile.classLevel).toUpperCase();
-
-  const preferences =
-    memory.preferences && typeof memory.preferences === "object"
-      ? memory.preferences
-      : {};
-  base.preferences.tone = cleanText(preferences.tone) || base.preferences.tone;
-  base.preferences.language =
-    cleanText(preferences.language) || base.preferences.language;
-  base.preferences.answerLength =
-    cleanText(preferences.answerLength) || base.preferences.answerLength;
-
-  base.facts = Array.isArray(memory.facts)
-    ? memory.facts.map(normalizeFact).filter(Boolean).slice(-25)
-    : [];
-
-  base.lastUpdated =
-    typeof memory.lastUpdated === "number" ? memory.lastUpdated : Date.now();
-
-  return base;
+  localStorage.removeItem(LEGACY_MESSAGES_KEY);
 }
 
 export function loadMemory() {
-  try {
-    const raw = localStorage.getItem(MEMORY_KEY);
-    if (!raw) return createEmptyMemory();
-    return normalizeMemory(safeJsonParse(raw, null));
-  } catch {
-    return createEmptyMemory();
+  const memory = safeJsonParse(localStorage.getItem(scopedMemoryKey()), {});
+  if (!memory || typeof memory !== "object") {
+    return {
+      profile: {},
+      preferences: {},
+      facts: [],
+      updatedAt: Date.now(),
+    };
   }
+
+  return {
+    profile: memory.profile && typeof memory.profile === "object" ? memory.profile : {},
+    preferences:
+      memory.preferences && typeof memory.preferences === "object"
+        ? memory.preferences
+        : {},
+    facts: Array.isArray(memory.facts) ? memory.facts : [],
+    updatedAt: typeof memory.updatedAt === "number" ? memory.updatedAt : Date.now(),
+  };
 }
 
 export function saveMemory(memory) {
-  try {
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(normalizeMemory(memory)));
-  } catch (error) {
-    console.warn("Could not save memory", error);
-  }
-}
-
-function upsertFact(memory, key, value, label, source = "chat") {
-  const nextValue = capText(value, 120);
-  if (!nextValue) return;
-
-  const nextFact = normalizeFact({
-    key,
-    value: nextValue,
-    label,
-    source,
+  const safeMemory = {
+    profile: memory?.profile && typeof memory.profile === "object" ? memory.profile : {},
+    preferences:
+      memory?.preferences && typeof memory.preferences === "object"
+        ? memory.preferences
+        : {},
+    facts: Array.isArray(memory?.facts) ? memory.facts : [],
     updatedAt: Date.now(),
-  });
+  };
 
-  if (!nextFact) return;
-
-  memory.facts = (memory.facts || []).filter((fact) => fact?.key !== nextFact.key);
-  memory.facts.push(nextFact);
-  memory.facts = memory.facts.slice(-25);
+  localStorage.setItem(scopedMemoryKey(), JSON.stringify(safeMemory));
+  return safeMemory;
 }
 
-function extractMemoryHints(message) {
-  const text = cleanText(message);
-  if (!text) return {};
+export function updateMemoryFromMessage(messageText) {
+  const text = cleanText(messageText);
+  if (!text) return loadMemory();
 
-  const hints = {};
+  const memory = loadMemory();
 
   const nameMatch = text.match(
-    /\b(?:my name is|call me)\s+([A-Za-z][A-Za-z' -]{1,40})\b/i
+    /\b(my name is|call me|i am|i'm)\s+([A-Za-z][A-Za-z0-9._ -]{1,40})/i
   );
   if (nameMatch) {
-    const name = cleanText(nameMatch[1]).replace(
-      /\b(?:student|boy|girl|man|woman)\b/gi,
-      ""
-    );
-    if (name && !/^\d+$/.test(name)) hints.name = name;
+    memory.profile.name = capText(nameMatch[2], 40);
   }
 
-  const examMatch = text.match(/\b(waec|neco|jamb|gce|nabteb)\b/i);
-  if (examMatch) hints.examType = examMatch[1].toUpperCase();
-
-  const subjectMatch = text.match(
-    /\b(?:my favorite subject is|my favourite subject is|my best subject is)\s+([A-Za-z][A-Za-z0-9 &/.-]{1,40})/i
+  const schoolMatch = text.match(
+    /\b(my school is|i attend|i go to)\s+([A-Za-z][A-Za-z0-9._ -]{1,60})/i
   );
-  if (subjectMatch) {
-    const subject = cleanText(subjectMatch[1]);
-    if (subject) hints.favoriteSubject = subject;
+  if (schoolMatch) {
+    memory.profile.school = capText(schoolMatch[2], 60);
   }
 
   const classMatch = text.match(
-    /\b(?:i am in|i'm in|my class is)\s+(jss\s?[123]|ss\s?[123]|primary\s?[1-6]|year\s?[1-6])\b/i
+    /\b(i am in|my class is|i'm in)\s+([A-Za-z0-9._ -]{1,30})/i
   );
   if (classMatch) {
-    hints.classLevel = cleanText(classMatch[1]).replace(/\s+/g, "").toUpperCase();
+    memory.profile.classLevel = capText(classMatch[2], 30);
   }
 
-  const schoolMatch = text.match(/\b(?:my school is|i go to)\s+(.{2,60}?)(?:[.!?]|$)/i);
-  if (schoolMatch) hints.school = cleanText(schoolMatch[1]);
+  const toneMatch = text.match(/\b(use|prefer)\s+(simple|friendly|formal|short|long)\s+(answers|response|responses)?/i);
+  if (toneMatch) {
+    memory.preferences.tone = toneMatch[2].toLowerCase();
+  }
 
-  const preferenceMatch = text.match(
-    /\b(?:please answer|speak)\s+(simply|briefly|shortly|clearly)\b/i
-  );
-  if (preferenceMatch) hints.answerLength = preferenceMatch[1].toLowerCase();
+  const langMatch = text.match(/\b(english|yoruba|igbo|hausa|pidgin)\b/i);
+  if (langMatch) {
+    memory.preferences.language = langMatch[1].toLowerCase();
+  }
 
-  return hints;
+  const lengthMatch = text.match(/\b(short|medium|long)\s+(answers|response|responses)\b/i);
+  if (lengthMatch) {
+    memory.preferences.answerLength = lengthMatch[1].toLowerCase();
+  }
+
+  const lower = text.toLowerCase();
+  const factKeywords = [
+    "exam",
+    "waec",
+    "neco",
+    "jamb",
+    "nabteb",
+    "physics",
+    "chemistry",
+    "biology",
+    "math",
+    "mathematics",
+    "english",
+    "government",
+    "economics",
+    "commerce",
+    "accounting",
+    "literature",
+    "history",
+  ];
+
+  const matchedKeyword = factKeywords.find((keyword) => lower.includes(keyword));
+  if (matchedKeyword) {
+    const fact = {
+      id: makeId("fact"),
+      label: capText(matchedKeyword, 40),
+      value: capText(text, 180),
+      ts: Date.now(),
+    };
+    const facts = Array.isArray(memory.facts) ? memory.facts : [];
+    facts.push(fact);
+    memory.facts = facts.slice(-20);
+  }
+
+  return saveMemory(memory);
 }
 
-export function updateMemoryFromMessage(message, source = "chat") {
-  const next = loadMemory();
-  const hints = extractMemoryHints(message);
-
-  if (hints.name) {
-    next.profile.name = hints.name;
-    upsertFact(next, "name", hints.name, "Name", source);
-  }
-
-  if (hints.examType) {
-    next.profile.examType = hints.examType;
-    upsertFact(next, "examType", hints.examType, "Exam type", source);
-  }
-
-  if (hints.favoriteSubject) {
-    next.profile.favoriteSubject = hints.favoriteSubject;
-    upsertFact(next, "favoriteSubject", hints.favoriteSubject, "Favorite subject", source);
-  }
-
-  if (hints.classLevel) {
-    next.profile.classLevel = hints.classLevel;
-    upsertFact(next, "classLevel", hints.classLevel, "Class level", source);
-  }
-
-  if (hints.school) {
-    next.profile.school = hints.school;
-    upsertFact(next, "school", hints.school, "School", source);
-  }
-
-  if (hints.answerLength) {
-    next.preferences.answerLength = hints.answerLength;
-    upsertFact(next, "answerLength", hints.answerLength, "Answer length", source);
-  }
-
-  next.lastUpdated = Date.now();
-  saveMemory(next);
-  return next;
-}
-
-export function buildMemoryPrompt(memory = loadMemory()) {
-  const safeMemory = normalizeMemory(memory);
+export function buildMemoryPrompt() {
+  const memory = loadMemory();
   const lines = [];
 
-  if (safeMemory.profile.name) lines.push(`- Name: ${safeMemory.profile.name}`);
-  if (safeMemory.profile.examType) lines.push(`- Exam type: ${safeMemory.profile.examType}`);
-  if (safeMemory.profile.favoriteSubject) lines.push(`- Favorite subject: ${safeMemory.profile.favoriteSubject}`);
-  if (safeMemory.profile.classLevel) lines.push(`- Class level: ${safeMemory.profile.classLevel}`);
-  if (safeMemory.profile.school) lines.push(`- School: ${safeMemory.profile.school}`);
+  if (memory.profile && Object.keys(memory.profile).length) {
+    lines.push("Profile:");
+    if (memory.profile.name) lines.push(`- Name: ${memory.profile.name}`);
+    if (memory.profile.school) lines.push(`- School: ${memory.profile.school}`);
+    if (memory.profile.classLevel) lines.push(`- Class: ${memory.profile.classLevel}`);
+  }
 
-  if (safeMemory.preferences.tone) lines.push(`- Tone: ${safeMemory.preferences.tone}`);
-  if (safeMemory.preferences.language) lines.push(`- Language: ${safeMemory.preferences.language}`);
-  if (safeMemory.preferences.answerLength) lines.push(`- Answer length: ${safeMemory.preferences.answerLength}`);
+  if (memory.preferences && Object.keys(memory.preferences).length) {
+    lines.push("Preferences:");
+    if (memory.preferences.tone) lines.push(`- Tone: ${memory.preferences.tone}`);
+    if (memory.preferences.language) lines.push(`- Language: ${memory.preferences.language}`);
+    if (memory.preferences.answerLength) {
+      lines.push(`- Answer length: ${memory.preferences.answerLength}`);
+    }
+  }
 
-  const recentFacts = Array.isArray(safeMemory.facts) ? safeMemory.facts.slice(-8) : [];
+  const recentFacts = Array.isArray(memory.facts) ? memory.facts.slice(-8) : [];
   if (recentFacts.length) {
-    lines.push("- Remembered facts:");
+    lines.push("Remembered facts:");
     recentFacts.forEach((fact) => {
-      lines.push(`  - ${fact.label}: ${fact.value}`);
+      lines.push(`- ${fact.label}: ${fact.value}`);
     });
   }
 
@@ -394,7 +361,7 @@ export function buildMemoryPrompt(memory = loadMemory()) {
 
 export function clearMemory() {
   try {
-    localStorage.removeItem(MEMORY_KEY);
+    localStorage.removeItem(scopedMemoryKey());
   } catch (error) {
     console.warn("Could not clear memory", error);
   }
@@ -406,5 +373,11 @@ export function getStorageKeys() {
     CURRENT_CHAT_KEY,
     LEGACY_MESSAGES_KEY,
     MEMORY_KEY,
+    AUTH_USER_KEY,
+    scoped: {
+      sessions: scopedSessionKey(),
+      currentChat: scopedCurrentChatKey(),
+      memory: scopedMemoryKey(),
+    },
   };
 }
