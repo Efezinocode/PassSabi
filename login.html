@@ -13,75 +13,115 @@
 </head>
 <body class="auth-page">
   <main class="auth-shell">
-    <section class="auth-card">
-      <header class="auth-header">
-        <a class="brand" href="index.html" aria-label="Back to home">
-          <div class="brand-badge">P</div>
-          <div class="brand-text">
-            <strong>PassSabi AI</strong>
-            <span>Your Personal AI Teacher</span>
-          </div>
-        </a>
-
-        <h1 class="auth-title">Welcome back</h1>
-        <p class="auth-subtitle">Sign in to continue your learning journey and access your chats.</p>
-      </header>
-
-      <div class="auth-body">
-        <div id="loginNotice" class="notice" aria-live="polite"></div>
-
-        <form id="loginForm" novalidate>
-          <div class="form-group">
-            <div class="label-row">
-              <label for="loginEmail">Email address</label>
+    <section class="auth-layout">
+      <aside class="auth-hero">
+        <div class="auth-hero-top">
+          <a class="brand" href="index.html" aria-label="Back to home">
+            <div class="brand-badge">P</div>
+            <div class="brand-text">
+              <strong>PassSabi AI</strong>
+              <span>Your Personal AI Teacher</span>
             </div>
-            <input
-              id="loginEmail"
-              type="email"
-              placeholder="you@example.com"
-              autocomplete="email"
-              required
-            />
-          </div>
+          </a>
 
-          <div class="form-group">
-            <div class="label-row">
-              <label for="loginPassword">Password</label>
-              <a class="helper-link" href="forgot-password.html">Forgot password?</a>
-            </div>
-            <div class="input-wrap">
+          <span class="hero-pill">Phase 1 • Polish</span>
+        </div>
+
+        <h1 class="auth-hero-title">Welcome back.</h1>
+        <p class="auth-hero-text">
+          Continue your studies, reopen your chat history, and keep your learning progress in one place.
+        </p>
+
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <strong>Fast replies</strong>
+            <span>Clean streaming chat</span>
+          </div>
+          <div class="hero-stat">
+            <strong>Saved sessions</strong>
+            <span>Supabase-backed login</span>
+          </div>
+          <div class="hero-stat">
+            <strong>Mobile ready</strong>
+            <span>Built for Android first</span>
+          </div>
+        </div>
+
+        <div class="hero-list">
+          <div class="hero-item">Smart tutoring for schoolwork</div>
+          <div class="hero-item">Chat history and profile sync</div>
+          <div class="hero-item">PWA-ready layout foundation</div>
+        </div>
+
+        <p class="hero-foot">
+          Sign in once and keep your learning flow across devices.
+        </p>
+      </aside>
+
+      <section class="auth-card">
+        <header class="auth-header">
+          <h2 class="auth-title">Log in</h2>
+          <p class="auth-subtitle">Use your email and password to continue.</p>
+        </header>
+
+        <div class="auth-body">
+          <div id="loginNotice" class="notice" aria-live="polite"></div>
+
+          <form id="loginForm" novalidate>
+            <div class="form-group">
+              <div class="label-row">
+                <label for="loginEmail">Email address</label>
+              </div>
               <input
-                id="loginPassword"
-                type="password"
-                placeholder="Enter your password"
-                autocomplete="current-password"
+                id="loginEmail"
+                type="email"
+                placeholder="you@example.com"
+                autocomplete="email"
                 required
               />
-              <button
-                type="button"
-                class="input-icon-btn"
-                data-toggle-password
-                data-target="loginPassword"
-              >
-                Show
-              </button>
             </div>
-          </div>
 
-          <div class="row" style="margin-bottom: 16px;">
-            <label class="checkbox">
-              <input id="rememberMe" type="checkbox" />
-              <span>Remember me</span>
-            </label>
-          </div>
+            <div class="form-group">
+              <div class="label-row">
+                <label for="loginPassword">Password</label>
+                <a class="helper-link" href="forgot-password.html">Forgot password?</a>
+              </div>
+              <div class="input-wrap">
+                <input
+                  id="loginPassword"
+                  type="password"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  class="input-icon-btn"
+                  data-toggle-password
+                  data-target="loginPassword"
+                >
+                  Show
+                </button>
+              </div>
+            </div>
 
-          <button id="loginBtn" class="auth-btn" type="submit">Login</button>
-        </form>
-      </div>
+            <div class="row auth-row">
+              <label class="checkbox">
+                <input id="rememberMe" type="checkbox" />
+                <span>Remember me</span>
+              </label>
 
-      <div class="auth-footer">
-        Don’t have an account? <a href="signup.html">Create one</a>
-      </div>
+              <a class="tiny-link" href="signup.html">Create account</a>
+            </div>
+
+            <button id="loginBtn" class="auth-btn" type="submit">Login</button>
+          </form>
+        </div>
+
+        <div class="auth-footer">
+          Don’t have an account? <a href="signup.html">Create one</a>
+        </div>
+      </section>
     </section>
   </main>
 </body>
