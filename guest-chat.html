@@ -19,6 +19,14 @@
 
   <header class="chat-topbar">
     <button
+      type="button"
+      class="menu-button"
+      aria-label="Go back"
+      onclick="window.history.length > 1 ? window.history.back() : window.location.href='index.html'">
+      ←
+    </button>
+
+    <button
       id="menuBtn"
       type="button"
       class="menu-button"
@@ -37,6 +45,7 @@
     </a>
 
     <div class="topbar-auth">
+      <button id="newChatBtn" type="button" class="btn btn-secondary">New chat</button>
       <a href="login.html" class="topbar-login-link">Login</a>
     </div>
   </header>
@@ -48,10 +57,6 @@
       <h3>PassSabi AI</h3>
       <p>Your Personal AI Teacher</p>
     </div>
-
-    <button id="newChatBtn" type="button" class="sidebar-action">
-      + New Chat
-    </button>
 
     <section class="sidebar-section">
       <h4>Chat History</h4>
