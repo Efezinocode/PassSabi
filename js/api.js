@@ -1,154 +1,232 @@
-function extractSseData(block) {
-  const lines = String(block || "").split(/\r?\n/);
-  const dataLines = [];
+// js/api.js
 
-  for (const line of lines) {
-    if (line.startsWith("data:")) {
-      dataLines.push(line.slice(5).replace(/^\s+/, ""));
-    }
-  }
+const DEFAULT_CHAT_ENDPOINT = "/api/chat";
+const DEFAULT_TIMEOUT_MS = 90000;
+const DEFAULT_RETRY_DELAY_MS = 1200;
 
-  return dataLines.length ? dataLines.join("\n") : null;
-}
-
-function tryParseJson(value) {
+function safeJsonParse(value, fallback = null) {
   try {
     return JSON.parse(value);
   } catch {
-    return null;
+    return fallback;
   }
 }
 
-async function readResponseAsText(response) {
-  try {
-    return await response.text();
-  } catch {
-    return "";
+function normalizeText(value) {
+  return String(value ?? "").replace(/\r\n/g, "\n");
+}
+
+export function extractSseData(block) {
+  const text = normalizeText(block);
+  if (!text.trim()) return "";
+
+  const lines = text.split("\n");
+  const dataLines = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) continue;
+
+    let value = trimmed.slice(5);
+    if (value.startsWith(" ")) value = value.slice(1);
+
+    if (value === "[DONE]") continue;
+    dataLines.push(value);
   }
+
+  return dataLines.join("\n").trim();
+}
+
+function decodeChunk(buffer, chunk) {
+  return buffer + chunk;
+}
+
+function createTimeoutSignal(signal, timeoutMs) {
+  if (typeof AbortController === "undefined") {
+    return { signal, clear: () => {} };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else {
+      signal.addEventListener(
+        "abort",
+        () => controller.abort(),
+        { once: true }
+      );
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timeoutId),
+  };
+}
+
+async function readErrorText(response) {
+  try {
+    return (await response.text()) || `Request failed with status ${response.status}`;
+  } catch {
+    return `Request failed with status ${response.status}`;
+  }
+}
+
+function makeStreamUrl(endpoint) {
+  return endpoint || DEFAULT_CHAT_ENDPOINT;
 }
 
 export async function streamChatReply({
   message,
-  memory = "",
-  history = [],
-  provider = "",
+  provider,
   signal,
   onChunk,
   onDone,
-}) {
-  const response = await fetch("/api/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ message, memory, history, provider }),
-    signal,
-  });
-
-  if (!response.ok) {
-    const errorText = await readResponseAsText(response);
-    throw new Error(errorText || `HTTP ${response.status}`);
-  }
-
-  if (!response.body) {
-    throw new Error("Missing streaming response.");
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullText = "";
-  let doneCalled = false;
-
-  const emitParsedBlock = (block) => {
-    const data = extractSseData(block);
-    if (!data || data === "[DONE]") return;
-
-    const parsed = tryParseJson(data);
-    if (!parsed) return;
-
-    if (parsed.error) {
-      throw new Error(parsed.error);
-    }
-
-    if (typeof parsed.chunk === "string" && parsed.chunk.length > 0) {
-      const incoming = parsed.chunk;
-      fullText += incoming;
-
-      if (typeof onChunk === "function") {
-        onChunk(incoming, fullText, parsed);
-      }
-    }
-
-    if (parsed.done && !doneCalled) {
-      doneCalled = true;
-      if (typeof onDone === "function") {
-        onDone(parsed.provider);
-      }
-    }
+  onError,
+  endpoint = DEFAULT_CHAT_ENDPOINT,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+} = {}) {
+  const payload = {
+    message: String(message ?? ""),
   };
 
+  if (provider) {
+    payload.provider = provider;
+  }
+
+  const { signal: timeoutSignal, clear } = createTimeoutSignal(signal, timeoutMs);
+
   try {
+    const response = await fetch(makeStreamUrl(endpoint), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: timeoutSignal,
+    });
+
+    if (!response.ok) {
+      const errorText = await readErrorText(response);
+      throw new Error(errorText);
+    }
+
+    if (!response.body) {
+      const fallbackText = await response.text();
+      const parsed = safeJsonParse(fallbackText, null);
+      const text =
+        typeof parsed === "string"
+          ? parsed
+          : parsed?.reply || parsed?.text || fallbackText || "";
+      if (text && onChunk) onChunk(String(text));
+      if (onDone) onDone({ provider: provider || null, text: String(text || "") });
+      return String(text || "");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+
     while (true) {
       const { done, value } = await reader.read();
+      if (done) break;
 
-      if (value) {
-        buffer += decoder.decode(value, { stream: true });
-      }
+      buffer = decodeChunk(buffer, decoder.decode(value, { stream: true }));
+      const parts = buffer.split(/\n\n|\r\n\r\n|\r\r/g);
+      buffer = parts.pop() || "";
 
-      let boundaryIndex = buffer.indexOf("\n\n");
-      while (boundaryIndex !== -1) {
-        const block = buffer.slice(0, boundaryIndex);
-        buffer = buffer.slice(boundaryIndex + 2);
+      for (const part of parts) {
+        const data = extractSseData(part);
+        if (!data) continue;
+        if (data === "[DONE]") continue;
 
-        try {
-          emitParsedBlock(block);
-        } catch (err) {
-          try {
-            await reader.cancel();
-          } catch {
-            // ignore cancel errors
-          }
-          throw err;
+        let chunkText = data;
+
+        const parsed = safeJsonParse(data, null);
+        if (parsed && typeof parsed === "object") {
+          chunkText =
+            parsed.delta ??
+            parsed.text ??
+            parsed.content ??
+            parsed.message ??
+            parsed.reply ??
+            parsed.token ??
+            "";
         }
 
-        boundaryIndex = buffer.indexOf("\n\n");
+        if (chunkText) {
+          fullText += String(chunkText);
+          if (onChunk) onChunk(fullText);
+        }
       }
-
-      if (done) break;
     }
-
-    buffer += decoder.decode();
 
     if (buffer.trim()) {
-      try {
-        emitParsedBlock(buffer);
-      } catch (err) {
-        try {
-          await reader.cancel();
-        } catch {
-          // ignore cancel errors
+      const tail = extractSseData(buffer);
+      if (tail && tail !== "[DONE]") {
+        const parsed = safeJsonParse(tail, null);
+        const tailText =
+          parsed && typeof parsed === "object"
+            ? parsed.delta ??
+              parsed.text ??
+              parsed.content ??
+              parsed.message ??
+              parsed.reply ??
+              parsed.token ??
+              ""
+            : tail;
+
+        if (tailText) {
+          fullText += String(tailText);
+          if (onChunk) onChunk(fullText);
         }
-        throw err;
       }
     }
 
-    if (!doneCalled && typeof onDone === "function") {
-      onDone(undefined);
-    }
-
-    return fullText.trim();
-  } catch (err) {
-    if (err?.name === "AbortError") {
-      throw err;
-    }
-
-    throw err instanceof Error ? err : new Error(String(err || "Chat stream failed."));
+    if (onDone) onDone({ provider: provider || null, text: fullText });
+    return fullText;
+  } catch (error) {
+    if (onError) onError(error);
+    throw error;
   } finally {
-    try {
-      reader.releaseLock?.();
-    } catch {
-      // ignore
-    }
+    clear();
   }
 }
+
+export async function retryStreamChatReply(options = {}) {
+  const {
+    retries = 2,
+    retryDelayMs = DEFAULT_RETRY_DELAY_MS,
+    onError,
+  } = options;
+
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await streamChatReply(options);
+    } catch (error) {
+      lastError = error;
+      if (onError) onError(error, attempt);
+
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
+        continue;
+      }
+    }
+  }
+
+  throw lastError || new Error("Request failed.");
+}
+
+export function stopStream(controller) {
+  if (!controller) return;
+  try {
+    controller.abort();
+  } catch {
+    // ignore
+  }
+      }
