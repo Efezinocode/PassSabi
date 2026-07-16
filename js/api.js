@@ -77,7 +77,25 @@ function makeStreamUrl(endpoint) {
   return endpoint || DEFAULT_CHAT_ENDPOINT;
 }
 
+function normalizeMessagesInput({ messages, message }) {
+  if (Array.isArray(messages) && messages.length) {
+    return messages
+      .filter((m) => m && typeof m === "object")
+      .map((m) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: String(m.content ?? m.text ?? ""),
+      }))
+      .filter((m) => m.content.trim().length > 0);
+  }
+
+  const text = String(message ?? "").trim();
+  if (!text) return [];
+
+  return [{ role: "user", content: text }];
+}
+
 export async function streamChatReply({
+  messages,
   message,
   provider,
   signal,
@@ -86,11 +104,29 @@ export async function streamChatReply({
   onError,
   endpoint = DEFAULT_CHAT_ENDPOINT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  systemPrompt,
+  temperature,
+  maxTokens,
+  webSearch,
 } = {}) {
+  const normalizedMessages = normalizeMessagesInput({ messages, message });
+
   const payload = {
-    message: String(message ?? ""),
+    messages: normalizedMessages,
   };
 
+  if (typeof systemPrompt === "string" && systemPrompt.trim()) {
+    payload.systemPrompt = systemPrompt.trim();
+  }
+  if (typeof temperature === "number") {
+    payload.temperature = temperature;
+  }
+  if (typeof maxTokens === "number") {
+    payload.maxTokens = maxTokens;
+  }
+  if (typeof webSearch === "boolean") {
+    payload.webSearch = webSearch;
+  }
   if (provider) {
     payload.provider = provider;
   }
