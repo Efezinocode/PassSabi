@@ -13,7 +13,6 @@ import {
 
 import { currentUser } from "./auth.js";
 import { streamChatReply } from "./api.js";
-import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
 import {
   autoResizeInput,
   autoScrollIfNeeded,
@@ -56,6 +55,10 @@ const chatState = {
 
 const now = () => Date.now();
 
+function isLoggedIn() {
+  return !!currentUser();
+}
+
 function getChatBox() {
   return $("#chat-box");
 }
@@ -87,22 +90,56 @@ function getSearchInput() {
   return $(SEARCH_SELECTORS);
 }
 
+function openSidebarPanel() {
+  const sidebar = getSidebar();
+  const backdrop = getBackdrop();
+  const menuBtn = getMenuButton();
+
+  if (sidebar) sidebar.classList.add("open");
+  if (backdrop) backdrop.classList.add("show");
+  if (menuBtn) menuBtn.setAttribute("aria-expanded", "true");
+  document.body.classList.add("sidebar-open");
+}
+
+function closeSidebarPanel() {
+  const sidebar = getSidebar();
+  const backdrop = getBackdrop();
+  const menuBtn = getMenuButton();
+
+  if (sidebar) sidebar.classList.remove("open");
+  if (backdrop) backdrop.classList.remove("show");
+  if (menuBtn) menuBtn.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("sidebar-open");
+}
+
 function persistSessions() {
+  if (!isLoggedIn()) return;
   saveSessions(chatState.sessions);
 }
+
 function currentSession() {
   const id = chatState.currentChatId || loadCurrentChatId();
   return chatState.sessions.find((s) => s.id === id) || chatState.sessions[0] || null;
 }
+
 function refreshAll() {
-  renderHistory(getHistoryList(), chatState.sessions, chatState.currentChatId, historyHandlers());
+  renderHistory(
+    getHistoryList(),
+    isLoggedIn() ? chatState.sessions : [],
+    chatState.currentChatId,
+    historyHandlers()
+  );
   renderCurrentSession(getChatBox(), currentSession());
   updateWelcomeState(getWelcomeScreen(), currentSession());
 }
+
 function setCurrentSessionId(id) {
   chatState.currentChatId = String(id || "");
-  saveCurrentChatId(chatState.currentChatId);
+  if (isLoggedIn()) {
+    saveCurrentChatId(chatState.currentChatId);
+  }
 }
+
 function ensureSession() {
   let session = currentSession();
   if (!session) {
@@ -113,12 +150,7 @@ function ensureSession() {
   }
   return session;
 }
-function closeSidebarPanel() {
-  const sidebar = getSidebar();
-  const backdrop = getBackdrop();
-  const menuBtn = getMenuButton();
-  if (sidebar && backdrop && menuBtn) closeSidebar(sidebar, backdrop, menuBtn);
-}
+
 function historyHandlers() {
   return {
     onSwitch: (id) => {
@@ -126,6 +158,7 @@ function historyHandlers() {
       closeSidebarPanel();
     },
     onPin: (id) => {
+      if (!isLoggedIn()) return;
       const s = chatState.sessions.find((x) => x.id === id);
       if (!s) return;
       s.pinned = !s.pinned;
@@ -134,6 +167,7 @@ function historyHandlers() {
       refreshAll();
     },
     onRename: (id) => {
+      if (!isLoggedIn()) return;
       const title = prompt("Rename chat", "");
       if (!title) return;
       const s = chatState.sessions.find((x) => x.id === id);
@@ -144,6 +178,7 @@ function historyHandlers() {
       refreshAll();
     },
     onDelete: (id) => {
+      if (!isLoggedIn()) return;
       chatState.sessions = chatState.sessions.filter((s) => s.id !== id);
       if (chatState.currentChatId === id) {
         chatState.currentChatId = chatState.sessions[0]?.id || "";
@@ -161,7 +196,12 @@ function selectSession(id) {
   if (!s) return;
   setCurrentSessionId(s.id);
   renderCurrentSession(getChatBox(), s);
-  renderHistory(getHistoryList(), chatState.sessions, chatState.currentChatId, historyHandlers());
+  renderHistory(
+    getHistoryList(),
+    isLoggedIn() ? chatState.sessions : [],
+    chatState.currentChatId,
+    historyHandlers()
+  );
   updateWelcomeState(getWelcomeScreen(), s);
   scrollToBottom(getChatBox());
 }
@@ -177,32 +217,57 @@ function createNewChat(title = "New Chat") {
 }
 
 function loadData() {
+  if (!isLoggedIn()) {
+    chatState.sessions = [createSession("New Chat")];
+    chatState.currentChatId = chatState.sessions[0]?.id || "";
+    return;
+  }
+
   const saved = loadSessions();
   if (!saved.length) {
     if (migrateLegacyMessages()) removeLegacyMessagesKey();
   }
+
   chatState.sessions = loadSessions();
   chatState.currentChatId = loadCurrentChatId() || chatState.sessions[0]?.id || "";
+
   if (!chatState.currentChatId && chatState.sessions[0]) {
     chatState.currentChatId = chatState.sessions[0].id;
     saveCurrentChatId(chatState.currentChatId);
   }
+
   if (!chatState.sessions.length) createNewChat();
 }
 
 function bindSidebarShell() {
   const menuBtn = getMenuButton();
-  const sidebar = getSidebar();
   const backdrop = getBackdrop();
   const newChatBtn = $("#newChatBtn");
-  if (!menuBtn || !sidebar || !backdrop) return;
 
-  bindSidebarEvents({
-    menuBtn,
-    sidebar,
-    backdrop,
-    newChatBtn,
-    onNewChat: () => createNewChat(),
+  if (menuBtn) {
+    menuBtn.addEventListener("click", () => {
+      const sidebar = getSidebar();
+      if (!sidebar) return;
+      if (sidebar.classList.contains("open")) closeSidebarPanel();
+      else openSidebarPanel();
+    });
+  }
+
+  if (backdrop) {
+    backdrop.addEventListener("click", closeSidebarPanel);
+  }
+
+  if (newChatBtn && newChatBtn.dataset.bound !== "true") {
+    newChatBtn.dataset.bound = "true";
+    newChatBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      createNewChat();
+      closeSidebarPanel();
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeSidebarPanel();
   });
 }
 
@@ -213,6 +278,7 @@ function bindNewChatButtons() {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       createNewChat();
+      closeSidebarPanel();
     });
   });
 }
@@ -250,8 +316,12 @@ function buildModelPrompt(userText) {
     "You are PassSabi AI, a friendly personal AI teacher for students in Nigeria.",
     "Teach clearly, step by step, and keep answers simple.",
   ];
-  const mem = buildMemoryPrompt();
-  if (mem) parts.push(mem);
+
+  if (isLoggedIn()) {
+    const mem = buildMemoryPrompt();
+    if (mem) parts.push(mem);
+  }
+
   if (userText) parts.push(`Student message: ${userText}`);
   return parts.join("\n\n");
 }
@@ -275,7 +345,9 @@ export function buildStudyModePrompt(message) {
 }
 
 export function buildLessonPrompt(action, answerText) {
-  const lastUser = [...(currentSession()?.messages || [])].reverse().find((m) => m.role === "user");
+  const lastUser = [...(currentSession()?.messages || [])]
+    .reverse()
+    .find((m) => m.role === "user");
   const topic = lastUser?.text || answerText || currentSession()?.title || "this topic";
 
   if (action === "explain") {
@@ -299,7 +371,13 @@ export function buildLessonPrompt(action, answerText) {
   return null;
 }
 
-async function startGeneration({ visibleText = "", promptText = "", appendUserMessage = true, clearInput = false, autoTitle = true } = {}) {
+async function startGeneration({
+  visibleText = "",
+  promptText = "",
+  appendUserMessage = true,
+  clearInput = false,
+  autoTitle = true,
+} = {}) {
   const finalText = String(promptText || visibleText || readInputValue()).trim();
   if (!finalText) return;
 
@@ -344,14 +422,19 @@ async function startGeneration({ visibleText = "", promptText = "", appendUserMe
     updateAssistant(answer);
 
     session.messages.push({ role: "assistant", text: answer, ts: now() });
-    updateMemoryFromMessage(finalText);
+
+    if (isLoggedIn()) {
+      updateMemoryFromMessage(finalText);
+    }
+
     session.updatedAt = now();
     persistSessions();
     refreshAll();
     scrollToBottom(getChatBox());
   } catch (e) {
     hideTyping();
-    const msg = e?.name === "AbortError" ? "Request stopped." : e?.message || "Something went wrong.";
+    const msg =
+      e?.name === "AbortError" ? "Request stopped." : e?.message || "Something went wrong.";
     updateAssistant(msg);
     session.messages.push({ role: "assistant", text: msg, ts: now() });
     session.updatedAt = now();
@@ -367,7 +450,13 @@ function handleSend(e) {
   if (e) e.preventDefault();
   const value = readInputValue();
   if (!value) return;
-  startGeneration({ visibleText: value, promptText: value, appendUserMessage: true, clearInput: true, autoTitle: true });
+  startGeneration({
+    visibleText: value,
+    promptText: value,
+    appendUserMessage: true,
+    clearInput: true,
+    autoTitle: true,
+  });
   closeSidebarPanel();
 }
 
@@ -461,28 +550,48 @@ function initChatApp() {
 
   setMessageActionHandlers({
     onRetry: () => {
-      const lastUser = [...(currentSession()?.messages || [])].reverse().find((m) => m.role === "user");
+      const lastUser = [...(currentSession()?.messages || [])]
+        .reverse()
+        .find((m) => m.role === "user");
       if (!lastUser?.text) return;
-      startGeneration({ visibleText: lastUser.text, promptText: lastUser.text, appendUserMessage: false, clearInput: false, autoTitle: false });
+      startGeneration({
+        visibleText: lastUser.text,
+        promptText: lastUser.text,
+        appendUserMessage: false,
+        clearInput: false,
+        autoTitle: false,
+      });
     },
     onLessonTool: (action, context = {}) => {
       const lesson = buildLessonPrompt(action, context.answerText || "");
       if (!lesson) return;
-      startGeneration({ visibleText: lesson.visibleText, promptText: lesson.promptText, appendUserMessage: true, clearInput: false, autoTitle: false });
+      startGeneration({
+        visibleText: lesson.visibleText,
+        promptText: lesson.promptText,
+        appendUserMessage: true,
+        clearInput: false,
+        autoTitle: false,
+      });
     },
     onShare: async (action) => {
       const session = currentSession();
-      const lastAssistant = [...(session?.messages || [])].reverse().find((m) => m.role === "assistant");
+      const lastAssistant = [...(session?.messages || [])]
+        .reverse()
+        .find((m) => m.role === "assistant");
       const text = lastAssistant?.text || "";
+
       if (action === "pin") {
+        if (!session) return;
         session.pinned = !session.pinned;
         persistSessions();
         refreshAll();
         return;
       }
+
       if (!text) return;
 
       const title = session?.title || "PassSabi AI";
+
       if (action === "native-share" && navigator.share) {
         try {
           await navigator.share({ title, text });
@@ -490,7 +599,10 @@ function initChatApp() {
         return;
       }
 
-      const blob = new Blob([action === "md" ? `# ${title}\n\n${text}` : text], { type: "text/plain;charset=utf-8" });
+      const blob = new Blob(
+        [action === "md" ? `# ${title}\n\n${text}` : text],
+        { type: "text/plain;charset=utf-8" }
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -509,6 +621,7 @@ function initChatApp() {
 
   window.addEventListener("pageshow", refreshAll);
   refreshAll();
+
   const input = getChatInput();
   if (input) autoResizeInput(input);
   scrollToBottom(getChatBox());
