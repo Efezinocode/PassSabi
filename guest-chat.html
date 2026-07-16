@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#0f172a" />
   <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations, and learning support." />
   <meta name="color-scheme" content="dark" />
-
   <title>PassSabi AI Chat | Guest</title>
 
   <link rel="stylesheet" href="css/main.css" />
@@ -45,34 +44,45 @@
     </a>
 
     <div class="topbar-auth">
-      <button id="newChatBtn" type="button" class="btn btn-secondary">New chat</button>
       <a href="login.html" class="topbar-login-link">Login</a>
+      <a href="signup.html" class="topbar-login-link">Sign up</a>
     </div>
   </header>
 
   <div id="backdrop" class="backdrop" aria-hidden="true"></div>
 
   <aside id="sidebar" class="sidebar" aria-hidden="true">
-    <div class="sidebar-header">
-      <h3>PassSabi AI</h3>
-      <p>Your Personal AI Teacher</p>
-    </div>
+    <div class="sidebar-inner">
+      <div class="sidebar-brand">
+        <h3>PassSabi AI</h3>
+        <p>Your Personal AI Teacher</p>
+      </div>
 
-    <section class="sidebar-section">
-      <h4>Chat History</h4>
-      <div id="chat-history" class="history-list"></div>
-    </section>
+      <button id="newChatBtn" type="button" class="sidebar-newchat">
+        + New Chat
+      </button>
 
-    <nav class="sidebar-nav" aria-label="Sidebar navigation">
-      <a href="guest-chat.html">Home</a>
-      <a href="about.html">About</a>
-      <a href="contact.html">Contact</a>
-      <a href="login.html">Login</a>
-      <a href="signup.html">Sign Up</a>
-    </nav>
+      <div class="sidebar-divider"></div>
 
-    <div class="sidebar-footer">
-      <p>Founded by <strong>Uzezi Great Efezino</strong></p>
+      <div class="sidebar-note">
+        Sign in to save your chats, keep history, and sync progress across devices.
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <nav class="sidebar-links" aria-label="Sidebar navigation">
+        <a href="guest-chat.html">Home</a>
+        <a href="login.html">Login</a>
+        <a href="signup.html">Sign Up</a>
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-footer">
+        Founded by <strong>Uzezi Great Efezino</strong>
+      </div>
     </div>
   </aside>
 
