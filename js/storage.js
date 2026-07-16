@@ -143,6 +143,53 @@ function writeStringKey(key, value) {
   return safeValue;
 }
 
+function getMessageText(message) {
+  if (!message || typeof message !== "object") return "";
+  return String(message.text ?? message.content ?? "").trim();
+}
+
+function normalizeMessage(message) {
+  const text = getMessageText(message);
+  if (!text) return null;
+
+  return {
+    role:
+      message.role === "assistant" ||
+      message.role === "system" ||
+      message.role === "developer"
+        ? message.role
+        : "user",
+    text,
+    ts: typeof message.ts === "number" ? message.ts : Date.now(),
+  };
+}
+
+function dedupeMessages(messages) {
+  const out = [];
+  let lastKey = "";
+
+  for (const message of Array.isArray(messages) ? messages : []) {
+    const normalized = normalizeMessage(message);
+    if (!normalized) continue;
+
+    const key = `${normalized.role}|${normalized.text}|${normalized.ts}`;
+    const last = out[out.length - 1];
+
+    if (last && last.role === normalized.role && last.text === normalized.text) {
+      continue;
+    }
+
+    if (key === lastKey) {
+      continue;
+    }
+
+    lastKey = key;
+    out.push(normalized);
+  }
+
+  return out;
+}
+
 export function normalizeSession(session) {
   const safeId =
     typeof session?.id === "string" && session.id.trim()
@@ -154,24 +201,19 @@ export function normalizeSession(session) {
       ? session.title.trim()
       : "New Chat";
 
-  const safeMessages = Array.isArray(session?.messages)
-    ? session.messages
-        .filter((message) => message && typeof message.text === "string")
-        .map((message) => ({
-          role: message.role === "assistant" ? "assistant" : "user",
-          text: String(message.text),
-          ts: typeof message.ts === "number" ? message.ts : Date.now(),
-        }))
-    : [];
+  const safeMessages = dedupeMessages(session?.messages);
+
+  const createdAt =
+    typeof session?.createdAt === "number" ? session.createdAt : Date.now();
+  const updatedAt =
+    typeof session?.updatedAt === "number" ? session.updatedAt : createdAt;
 
   return {
     id: safeId,
     title: safeTitle,
     pinned: !!session?.pinned,
-    createdAt:
-      typeof session?.createdAt === "number" ? session.createdAt : Date.now(),
-    updatedAt:
-      typeof session?.updatedAt === "number" ? session.updatedAt : Date.now(),
+    createdAt,
+    updatedAt,
     messages: safeMessages,
   };
 }
@@ -208,8 +250,20 @@ export function loadSessions() {
 
 export function saveSessions(sessions) {
   const safeSessions = Array.isArray(sessions) ? sessions.map(normalizeSession) : [];
-  writeJsonKey(scopedSessionKey(), safeSessions);
-  return safeSessions;
+
+  const unique = [];
+  const seen = new Set();
+
+  for (const session of safeSessions) {
+    if (!session?.id) continue;
+    if (seen.has(session.id)) continue;
+    seen.add(session.id);
+    unique.push(session);
+  }
+
+  unique.sort((a, b) => b.updatedAt - a.updatedAt);
+  writeJsonKey(scopedSessionKey(), unique);
+  return unique;
 }
 
 export function loadCurrentChatId() {
@@ -359,12 +413,8 @@ export function migrateLegacyMessages() {
   const session = createSession("Imported Chat");
 
   session.messages = legacy
-    .filter((message) => message && typeof message.text === "string")
-    .map((message) => ({
-      role: message.role === "assistant" ? "assistant" : "user",
-      text: String(message.text),
-      ts: typeof message.ts === "number" ? message.ts : Date.now(),
-    }));
+    .map(normalizeMessage)
+    .filter(Boolean);
 
   session.title = makeSessionTitle(session.messages[0]?.text || "Imported Chat");
   session.updatedAt = Date.now();
@@ -404,6 +454,15 @@ export function loadMemory() {
 }
 
 export function saveMemory(memory) {
+  if (!isLoggedIn()) {
+    return {
+      profile: {},
+      preferences: {},
+      facts: [],
+      updatedAt: Date.now(),
+    };
+  }
+
   const safeMemory = {
     profile: memory?.profile && typeof memory.profile === "object" ? memory.profile : {},
     preferences:
@@ -418,7 +477,31 @@ export function saveMemory(memory) {
   return safeMemory;
 }
 
+function dedupeFacts(facts) {
+  const out = [];
+  const seen = new Set();
+
+  for (const fact of Array.isArray(facts) ? facts : []) {
+    if (!fact || typeof fact !== "object") continue;
+    const key = `${cleanText(fact.label)}|${cleanText(fact.value)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: fact.id || makeId("fact"),
+      label: capText(fact.label, 40),
+      value: capText(fact.value, 180),
+      ts: typeof fact.ts === "number" ? fact.ts : Date.now(),
+    });
+  }
+
+  return out.slice(-20);
+}
+
 export function updateMemoryFromMessage(messageText) {
+  if (!isLoggedIn()) {
+    return loadMemory();
+  }
+
   const text = cleanText(messageText);
   if (!text) return loadMemory();
 
@@ -493,13 +576,15 @@ export function updateMemoryFromMessage(messageText) {
     };
     const facts = Array.isArray(memory.facts) ? memory.facts : [];
     facts.push(fact);
-    memory.facts = facts.slice(-20);
+    memory.facts = dedupeFacts(facts);
   }
 
   return saveMemory(memory);
 }
 
 export function buildMemoryPrompt() {
+  if (!isLoggedIn()) return "";
+
   const memory = loadMemory();
   const lines = [];
 
@@ -550,5 +635,5 @@ export function getStorageKeys() {
       currentChat: scopedCurrentChatKey(),
       memory: scopedMemoryKey(),
     },
-  };
+  }; 
 }
