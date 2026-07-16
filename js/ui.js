@@ -1,7 +1,13 @@
+// js/ui.js
+
 let messageActionHandlers = {
   onShare: null,
   onLessonTool: null,
   onRetry: null,
+  onSwitch: null,
+  onPin: null,
+  onRename: null,
+  onDelete: null,
 };
 
 export function setMessageActionHandlers(handlers = {}) {
@@ -111,9 +117,17 @@ function renderMarkdown(text) {
   if (!raw) return "";
 
   const codeBlocks = [];
-  let safe = raw.replace(/```([\w-]+)?\s*\n?([\s\S]*?)```/g, function (_, lang, code) {
+  let safe = raw.replace(/```([\w-]+)?\s*\n?([\s\S]*?)```/g, function (
+    _,
+    lang,
+    code
+  ) {
     const token = `__CODE_BLOCK_${codeBlocks.length}__`;
-    codeBlocks.push({ token, lang: String(lang || "").toLowerCase(), code });
+    codeBlocks.push({
+      token,
+      lang: String(lang || "").toLowerCase(),
+      code,
+    });
     return token;
   });
 
@@ -156,7 +170,9 @@ function renderMarkdown(text) {
       closeLists();
       const level = Math.min(trimmed.match(/^#{1,6}/)[0].length, 6);
       const content = trimmed.replace(/^#{1,6}\s+/, "");
-      html.push(`<h${level} class="md-h">${renderInlineMarkdown(content)}</h${level}>`);
+      html.push(
+        `<h${level} class="md-h">${renderInlineMarkdown(content)}</h${level}>`
+      );
       continue;
     }
 
@@ -167,7 +183,9 @@ function renderMarkdown(text) {
         html.push('<ul class="md-list">');
         inUl = true;
       }
-      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`);
+      html.push(
+        `<li>${renderInlineMarkdown(trimmed.replace(/^\-\s+/, ""))}</li>`
+      );
       continue;
     }
 
@@ -178,7 +196,9 @@ function renderMarkdown(text) {
         html.push('<ol class="md-list">');
         inOl = true;
       }
-      html.push(`<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`);
+      html.push(
+        `<li>${renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ""))}</li>`
+      );
       continue;
     }
 
@@ -197,9 +217,9 @@ function renderMarkdown(text) {
 
   let out = html.join("");
   codeBlocks.forEach((block) => {
-    const codeHtml = `<pre class="md-code"><code class="language-${block.lang || "text"} code-${block.lang || "text"}">${escapeHtml(
-      block.code.trimEnd()
-    )}</code></pre>`;
+    const codeHtml = `<pre class="md-code"><code class="language-${
+      block.lang || "text"
+    } code-${block.lang || "text"}">${escapeHtml(block.code.trimEnd())}</code></pre>`;
     out = out.split(block.token).join(codeHtml);
   });
   return out;
@@ -264,12 +284,20 @@ function bindGlobalShareMenuCloser() {
     if (event.target.closest(".share-menu")) return;
     if (event.target.closest(".message-action-btn")) return;
 
-    document.querySelectorAll(".share-menu.open").forEach((menu) => menu.classList.remove("open"));
-    document.querySelectorAll(".message-action-btn.active").forEach((btn) => btn.classList.remove("active"));
+    document.querySelectorAll(".share-menu.open").forEach((menu) =>
+      menu.classList.remove("open")
+    );
+    document
+      .querySelectorAll(".message-action-btn.active")
+      .forEach((btn) => btn.classList.remove("active"));
   });
 }
 
-function createAssistantMessageShell(chatBox, rawText = "", { showShare = false, pinned = false, showRetry = false } = {}) {
+function createAssistantMessageShell(
+  chatBox,
+  rawText = "",
+  { showShare = false, pinned = false, showRetry = false } = {}
+) {
   const row = document.createElement("div");
   row.className = "chat-row assistant";
 
@@ -294,7 +322,9 @@ function createAssistantMessageShell(chatBox, rawText = "", { showShare = false,
     try {
       const copied = await copyTextToClipboard(textToCopy);
       if (copied) showCopiedState(copyBtn);
-    } catch {}
+    } catch {
+      // ignore
+    }
   });
   actions.appendChild(copyBtn);
 
@@ -344,8 +374,12 @@ function createAssistantMessageShell(chatBox, rawText = "", { showShare = false,
       return item;
     };
 
-    shareMenu.appendChild(createShareItem(pinned ? "Unpin Chat" : "Pin Chat", "pin", "📌"));
-    shareMenu.appendChild(createShareItem("Share to apps", "native-share", "📤"));
+    shareMenu.appendChild(
+      createShareItem(pinned ? "Unpin Chat" : "Pin Chat", "pin", "📌")
+    );
+    shareMenu.appendChild(
+      createShareItem("Share to apps", "native-share", "📤")
+    );
     shareMenu.appendChild(createShareItem("Download .txt", "txt", "↓"));
     shareMenu.appendChild(createShareItem("Download .md", "md", "↓"));
 
@@ -353,8 +387,12 @@ function createAssistantMessageShell(chatBox, rawText = "", { showShare = false,
       event.stopPropagation();
 
       const isOpen = shareMenu.classList.contains("open");
-      document.querySelectorAll(".share-menu.open").forEach((menu) => menu.classList.remove("open"));
-      document.querySelectorAll(".message-action-btn.active").forEach((btn) => btn.classList.remove("active"));
+      document.querySelectorAll(".share-menu.open").forEach((menu) => {
+        menu.classList.remove("open");
+      });
+      document
+        .querySelectorAll(".message-action-btn.active")
+        .forEach((btn) => btn.classList.remove("active"));
 
       if (isOpen) return;
 
@@ -466,10 +504,12 @@ export function appendTypingIndicator(chatBox) {
 
 export function removeTypingPlaceholders(chatBox) {
   if (!chatBox) return;
-  chatBox.querySelectorAll(".chat-row.assistant .chat-bubble.typing").forEach((ph) => {
-    const row = ph.closest(".chat-row");
-    if (row) row.remove();
-  });
+  chatBox
+    .querySelectorAll(".chat-row.assistant .chat-bubble.typing")
+    .forEach((ph) => {
+      const row = ph.closest(".chat-row");
+      if (row) row.remove();
+    });
 }
 
 export function renderCurrentSession(chatBox, session) {
@@ -487,7 +527,12 @@ export function renderCurrentSession(chatBox, session) {
   });
 }
 
-export function renderHistory(historyList, sessions, currentChatId, handlers = {}) {
+export function renderHistory(
+  historyList,
+  sessions,
+  currentChatId,
+  handlers = {}
+) {
   if (!historyList) return;
 
   historyList.innerHTML = "";
@@ -496,35 +541,57 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
     ? sessions.slice().sort((a, b) => {
         const pinnedA = a?.pinned ? 1 : 0;
         const pinnedB = b?.pinned ? 1 : 0;
+
         if (pinnedA !== pinnedB) return pinnedB - pinnedA;
+
         return (b?.updatedAt || 0) - (a?.updatedAt || 0);
       })
     : [];
 
-  if (ordered.length === 0) {
+  if (!ordered.length) {
     const empty = document.createElement("p");
-    empty.className = "history-empty";
+    empty.className = "sidebar-empty";
     empty.textContent = "No chats yet.";
     historyList.appendChild(empty);
     return;
   }
 
+  const today = new Date().toDateString();
+
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = yesterdayDate.toDateString();
+
+  const groups = {
+    Recents: [],
+    Yesterday: [],
+    Older: [],
+  };
+
   ordered.forEach((session) => {
+    const updated = new Date(
+      session.updatedAt || session.createdAt || Date.now()
+    ).toDateString();
+
+    if (updated === today) {
+      groups.Recents.push(session);
+    } else if (updated === yesterday) {
+      groups.Yesterday.push(session);
+    } else {
+      groups.Older.push(session);
+    }
+  });
+
+  function createHistoryRow(session) {
     const row = document.createElement("div");
     row.className = "history-item-row";
 
-    const mainBtn = document.createElement("button");
-    mainBtn.type = "button";
-    mainBtn.className = `history-item-main ${
-      session.id === currentChatId ? "active" : ""
-    }`;
-    mainBtn.textContent = session.title || "New Chat";
-
-    mainBtn.addEventListener("click", () => {
-      if (typeof handlers.onSwitch === "function") {
-        handlers.onSwitch(session.id);
-      }
-    });
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      "history-item-main" + (session.id === currentChatId ? " active" : "");
+    button.textContent = session.title || "New Chat";
+    button.onclick = () => handlers.onSwitch?.(session.id);
 
     const menuWrap = document.createElement("div");
     menuWrap.className = "history-menu-wrap";
@@ -538,62 +605,81 @@ export function renderHistory(historyList, sessions, currentChatId, handlers = {
     const menu = document.createElement("div");
     menu.className = "history-menu";
 
-    const addItem = (label, action, icon) => {
+    function addItem(label, action, icon) {
       const item = document.createElement("button");
       item.type = "button";
       item.className = "history-menu-item";
       item.innerHTML = `<span class="history-menu-icon">${icon}</span><span>${label}</span>`;
 
-      item.addEventListener("click", (event) => {
-        event.stopPropagation();
+      item.onclick = (e) => {
+        e.stopPropagation();
 
-        if (action === "pin" && typeof handlers.onPin === "function") {
-          handlers.onPin(session.id);
-        }
-
-        if (action === "rename" && typeof handlers.onRename === "function") {
-          handlers.onRename(session.id);
-        }
-
-        if (action === "delete" && typeof handlers.onDelete === "function") {
-          handlers.onDelete(session.id);
+        switch (action) {
+          case "pin":
+            handlers.onPin?.(session.id);
+            break;
+          case "rename":
+            handlers.onRename?.(session.id);
+            break;
+          case "delete":
+            handlers.onDelete?.(session.id);
+            break;
         }
 
         menu.classList.remove("open");
-      });
+      };
 
       menu.appendChild(item);
-    };
+    }
 
     addItem(session.pinned ? "Unpin" : "Pin", "pin", "📌");
-    addItem("Rename", "rename", "✎");
+    addItem("Rename", "rename", "✏️");
     addItem("Delete", "delete", "🗑");
 
-    menuBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
+    menuBtn.onclick = (e) => {
+      e.stopPropagation();
 
-      document.querySelectorAll(".history-menu.open").forEach((node) => {
-        node.classList.remove("open");
+      document.querySelectorAll(".history-menu.open").forEach((m) => {
+        m.classList.remove("open");
       });
 
       menu.classList.toggle("open");
+    };
+
+    menuWrap.append(menuBtn, menu);
+    row.append(button, menuWrap);
+    return row;
+  }
+
+  function renderGroup(title, items) {
+    if (!items.length) return;
+
+    const section = document.createElement("section");
+    section.className = "sidebar-history-group";
+
+    const heading = document.createElement("div");
+    heading.className = "history-group-title";
+    heading.textContent = title;
+
+    const list = document.createElement("div");
+    list.className = "history-group-list";
+
+    items.forEach((session) => {
+      list.appendChild(createHistoryRow(session));
     });
 
-    row.addEventListener("click", () => {
-      menu.classList.remove("open");
-    });
+    section.append(heading, list);
+    historyList.appendChild(section);
+  }
 
-    menuWrap.appendChild(menuBtn);
-    menuWrap.appendChild(menu);
-
-    row.appendChild(mainBtn);
-    row.appendChild(menuWrap);
-    historyList.appendChild(row);
-  });
+  renderGroup("Recents", groups.Recents);
+  renderGroup("Yesterday", groups.Yesterday);
+  renderGroup("Older", groups.Older);
 }
 
 export function updateWelcomeState(welcomeScreen, session) {
   if (!welcomeScreen) return;
-  const hasMessages = session && Array.isArray(session.messages) && session.messages.length > 0;
+  const hasMessages =
+    session && Array.isArray(session.messages) && session.messages.length > 0;
   welcomeScreen.hidden = !!hasMessages;
-}
+      }
