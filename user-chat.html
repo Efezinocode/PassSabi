@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#0f172a" />
   <meta name="description" content="Chat with PassSabi AI for homework help, exam preparation, explanations, and learning support." />
   <meta name="color-scheme" content="dark" />
-
   <title>PassSabi AI Chat | User</title>
 
   <link rel="stylesheet" href="css/main.css" />
@@ -44,34 +43,43 @@
       </span>
     </a>
 
-    <div class="topbar-auth">
-      <button id="newChatBtn" type="button" class="btn btn-secondary">New chat</button>
-    </div>
+    <div class="topbar-auth"></div>
   </header>
 
   <div id="backdrop" class="backdrop" aria-hidden="true"></div>
 
   <aside id="sidebar" class="sidebar" aria-hidden="true">
-    <div class="sidebar-header">
-      <h3>PassSabi AI</h3>
-      <p>Your Personal AI Teacher</p>
-    </div>
+    <div class="sidebar-inner">
+      <div class="sidebar-brand">
+        <h3>PassSabi AI</h3>
+        <p>Your Personal AI Teacher</p>
+      </div>
 
-    <section class="sidebar-section">
-      <h4>Chat History</h4>
-      <div id="chat-history" class="history-list"></div>
-    </section>
+      <button id="newChatBtn" type="button" class="sidebar-newchat">
+        + New Chat
+      </button>
 
-    <nav class="sidebar-nav" aria-label="Sidebar navigation">
-      <a href="user-chat.html">Home</a>
-      <a href="about.html">About</a>
-      <a href="contact.html">Contact</a>
-      <a href="profile.html" data-shell-userlink>Profile</a>
-      <a href="#" data-shell-logout>Logout</a>
-    </nav>
+      <div class="sidebar-divider"></div>
 
-    <div class="sidebar-footer">
-      <p>Founded by <strong>Uzezi Great Efezino</strong></p>
+      <section class="sidebar-history-group">
+        <div class="history-group-title">Recents</div>
+        <div id="chat-history" class="history-group-list"></div>
+      </section>
+
+      <div class="sidebar-divider"></div>
+
+      <nav class="sidebar-links" aria-label="Sidebar navigation">
+        <a href="user-chat.html">Home</a>
+        <a href="profile.html" data-shell-userlink>Profile</a>
+        <a href="settings.html">Settings</a>
+        <a href="#" data-shell-logout>Logout</a>
+      </nav>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-footer">
+        Founded by <strong>Uzezi Great Efezino</strong>
+      </div>
     </div>
   </aside>
 
