@@ -13,6 +13,7 @@ import {
 
 import { currentUser } from "./auth.js";
 import { streamChatReply } from "./api.js";
+import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
 import {
   autoResizeInput,
   autoScrollIfNeeded,
@@ -88,6 +89,25 @@ function getSendButton() {
 }
 function getSearchInput() {
   return $(SEARCH_SELECTORS);
+}
+
+function goBackSafely() {
+  if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    window.location.replace("index.html");
+  }
+}
+
+function wireBackButtons() {
+  document.querySelectorAll("[data-back-button]").forEach((btn) => {
+    if (btn.dataset.bound === "true") return;
+    btn.dataset.bound = "true";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      goBackSafely();
+    });
+  });
 }
 
 function openSidebarPanel() {
@@ -433,10 +453,15 @@ async function startGeneration({
     scrollToBottom(getChatBox());
   } catch (e) {
     hideTyping();
+    console.error("PassSabi AI generation failed:", e);
+
     const msg =
-      e?.name === "AbortError" ? "Request stopped." : e?.message || "Something went wrong.";
+      e?.name === "AbortError"
+        ? "Request stopped."
+        : "PassSabi AI is temporarily unavailable. Please try again in a moment.";
+
     updateAssistant(msg);
-    session.messages.push({ role: "assistant", text: msg, ts: now() });
+    session.messages.push({ role: "assistant", text: msg, ts: now(), error: true });
     session.updatedAt = now();
     persistSessions();
     refreshAll();
@@ -541,6 +566,7 @@ function bindLessonButtons() {
 
 function initChatApp() {
   loadData();
+  wireBackButtons();
   bindSidebarShell();
   bindNewChatButtons();
   bindChatInput();
