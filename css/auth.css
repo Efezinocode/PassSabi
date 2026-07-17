@@ -530,3 +530,22 @@ input:focus {
     border-radius: 14px;
   }
 }
+
+.back-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f8fafc;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
