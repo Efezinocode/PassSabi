@@ -45,10 +45,7 @@ function normalizeMessages(messages) {
             ? msg.text
             : "";
 
-      return {
-        role,
-        content: cleanText(content),
-      };
+      return { role, content: cleanText(content) };
     })
     .filter((msg) => msg.content);
 }
@@ -146,26 +143,17 @@ function buildOpenAIInput(messages, systemPrompt) {
 
   const instructions = cleanText(systemPrompt);
   if (instructions) {
-    input.push({
-      role: "system",
-      content: instructions,
-    });
+    input.push({ role: "system", content: instructions });
   }
 
   for (const msg of safeMessages) {
     if (msg.role === "system") {
-      input.push({
-        role: "system",
-        content: msg.content,
-      });
+      input.push({ role: "system", content: msg.content });
       continue;
     }
 
     if (msg.role === "developer") {
-      input.push({
-        role: "developer",
-        content: msg.content,
-      });
+      input.push({ role: "developer", content: msg.content });
       continue;
     }
 
@@ -181,7 +169,6 @@ function buildOpenAIInput(messages, systemPrompt) {
 async function callOpenAI({
   messages,
   systemPrompt,
-  temperature = 0.7,
   maxTokens = 900,
   webSearch = false,
 }) {
@@ -190,7 +177,6 @@ async function callOpenAI({
 
   const model = getEnv("OPENAI_MODEL", "gpt-5.6");
   const input = buildOpenAIInput(messages, systemPrompt);
-
   const tools = webSearch ? [{ type: "web_search" }] : undefined;
 
   const response = await fetch(OPENAI_ENDPOINT, {
@@ -204,7 +190,6 @@ async function callOpenAI({
       input,
       tools,
       tool_choice: webSearch ? "auto" : "none",
-      temperature,
       max_output_tokens: maxTokens,
     }),
   });
@@ -368,7 +353,6 @@ async function generateReply({
         result = await callOpenAI({
           messages,
           systemPrompt,
-          temperature,
           maxTokens,
           webSearch,
         });
