@@ -9,7 +9,6 @@
   <meta name="description" content="PassSabi AI | Your Personal AI Teacher. Learn faster with AI for WAEC, NECO, JAMB, GCE, NABTEB, assignments, homework and more." />
   <meta name="theme-color" content="#0f172a" />
   <meta name="robots" content="index, follow" />
-  <meta name="google-site-verification" content="" />
 
   <link rel="canonical" href="https://passsabi.vercel.app/" />
 
@@ -27,6 +26,7 @@
 
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/home.css" />
+  <script type="module" src="js/site-shell.js"></script>
 </head>
 
 <body class="home-page">
@@ -125,5 +125,24 @@
       PassSabi AI starts free. Sign in later whenever you want to save chats and sync your learning across devices.
     </p>
   </main>
+
+  <nav class="bottom-nav" aria-label="Primary">
+    <a href="index.html" class="bottom-nav-item active" aria-current="page">
+      <span class="bottom-nav-icon">⌂</span>
+      <span>Home</span>
+    </a>
+    <a href="profile.html" class="bottom-nav-item">
+      <span class="bottom-nav-icon">◔</span>
+      <span>Profile</span>
+    </a>
+    <a href="settings.html" class="bottom-nav-item">
+      <span class="bottom-nav-icon">⚙</span>
+      <span>Settings</span>
+    </a>
+    <a href="#" class="bottom-nav-item" data-shell-logout>
+      <span class="bottom-nav-icon">⇢</span>
+      <span>Logout</span>
+    </a>
+  </nav>
 </body>
 </html>
