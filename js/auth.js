@@ -21,6 +21,7 @@ let authReadyPromise = null;
 let authSubscription = null;
 let authBootstrapped = false;
 let lastMigratedUserId = "";
+let verificationResendLock = false;
 
 function currentPath() {
   return window.location.pathname.split("/").pop() || "";
@@ -212,7 +213,7 @@ function getNextUrl(defaultUrl = USER_CHAT_PAGE) {
 }
 
 function getRedirectUrl(path) {
-  return new URL(path, window.location.origin).toString();
+  return new URL(path, window.location.href).toString();
 }
 
 function getInitials(nameOrEmail) {
@@ -305,6 +306,55 @@ function bindPasswordToggleButtons() {
       );
     });
   });
+}
+
+function isVerificationProblem(message) {
+  const text = String(message || "").toLowerCase();
+  return (
+    text.includes("confirm") ||
+    text.includes("verification") ||
+    text.includes("not confirmed") ||
+    text.includes("email not verified") ||
+    text.includes("email link")
+  );
+}
+
+async function resendVerificationEmail(email, notice) {
+  if (verificationResendLock) return;
+  verificationResendLock = true;
+
+  try {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: {
+        emailRedirectTo: getRedirectUrl(LOGIN_PAGE),
+      },
+    });
+
+    if (error) {
+      showNotice(
+        notice,
+        `I could not resend the verification email: ${error.message}`,
+        "error"
+      );
+      return;
+    }
+
+    showNotice(
+      notice,
+      "A fresh verification email was sent. Check inbox and spam.",
+      "success"
+    );
+  } catch (error) {
+    showNotice(
+      notice,
+      `I could not resend the verification email: ${error?.message || "Unknown error"}`,
+      "error"
+    );
+  } finally {
+    verificationResendLock = false;
+  }
 }
 
 export function currentUser() {
@@ -406,6 +456,10 @@ async function initLogin() {
 
     if (error) {
       showNotice(notice, error.message, "error");
+
+      if (isVerificationProblem(error.message)) {
+        await resendVerificationEmail(email, notice);
+      }
       return;
     }
 
@@ -422,7 +476,9 @@ async function initLogin() {
     }
 
     showNotice(notice, "Login successful. Redirecting...", "success");
-    window.location.replace(getNextUrl(USER_CHAT_PAGE));
+    window.setTimeout(() => {
+      window.location.replace(getNextUrl(USER_CHAT_PAGE));
+    }, 100);
   });
 }
 
@@ -593,7 +649,7 @@ async function initResetPassword() {
     }
 
     showNotice(notice, "Password updated. Redirecting to login...", "success");
-    setTimeout(() => {
+    window.setTimeout(() => {
       window.location.replace(LOGIN_PAGE);
     }, 1000);
   });
