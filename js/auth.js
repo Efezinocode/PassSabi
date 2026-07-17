@@ -9,7 +9,9 @@ const SIGNUP_PAGE = "signup.html";
 const FORGOT_PAGE = "forgot-password.html";
 const PROFILE_PAGE = "profile.html";
 const RESET_PAGE = "reset-password.html";
+const SETTINGS_PAGE = "settings.html";
 const USER_CHAT_PAGE = "user-chat.html";
+const GUEST_CHAT_PAGE = "guest-chat.html";
 
 const AUTH_SESSION_KEY = "passsabi_session_v1";
 const AUTH_USER_KEY = "passsabi_user_v1";
@@ -18,6 +20,7 @@ const REMEMBER_ME_KEY = "passsabi_remember_me";
 let authReadyPromise = null;
 let authSubscription = null;
 let authBootstrapped = false;
+let lastMigratedUserId = "";
 
 function currentPath() {
   return window.location.pathname.split("/").pop() || "";
@@ -32,8 +35,8 @@ function isAuthPage() {
   return [LOGIN_PAGE, SIGNUP_PAGE, FORGOT_PAGE, RESET_PAGE].includes(page);
 }
 
-function isProfilePage() {
-  return pageName() === PROFILE_PAGE;
+function isProtectedPage() {
+  return [PROFILE_PAGE, SETTINGS_PAGE].includes(pageName());
 }
 
 function readJson(key, fallback = null) {
@@ -61,10 +64,7 @@ function writeJson(key, value) {
 function emitAuthChanged(session, user) {
   window.dispatchEvent(
     new CustomEvent("passsabi:auth-changed", {
-      detail: {
-        session: session || null,
-        user: user || null,
-      },
+      detail: { session: session || null, user: user || null },
     })
   );
 }
@@ -79,6 +79,7 @@ function clearAuthCache() {
 
   window.__passsabiAuthSession = null;
   window.__passsabiAuthUser = null;
+  lastMigratedUserId = "";
   emitAuthChanged(null, null);
 }
 
@@ -122,7 +123,15 @@ function cacheAuthState(session) {
   if (safeUser) {
     window.__passsabiAuthUser = safeUser;
     writeJson(AUTH_USER_KEY, safeUser);
-    migrateGuestDataToUser();
+
+    if (safeUser.id && lastMigratedUserId !== safeUser.id) {
+      lastMigratedUserId = safeUser.id;
+      try {
+        migrateGuestDataToUser();
+      } catch (error) {
+        console.warn("Guest migration failed:", error);
+      }
+    }
   } else if (!safeSession) {
     window.__passsabiAuthUser = null;
     writeJson(AUTH_USER_KEY, null);
@@ -236,6 +245,68 @@ function setBusy(btn, busy, busyText) {
   btn.textContent = busy ? busyText : btn.dataset.defaultText;
 }
 
+function goBackSafely() {
+  if (window.history.length > 1) window.history.back();
+  else window.location.replace("index.html");
+}
+
+function bindBackButtons() {
+  document.querySelectorAll("[data-back-button]").forEach((btn) => {
+    if (btn.dataset.bound === "true") return;
+    btn.dataset.bound = "true";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      goBackSafely();
+    });
+  });
+}
+
+function renderAuthHeader() {
+  const user = currentUser();
+
+  document.querySelectorAll("[data-auth-label]").forEach((node) => {
+    node.textContent = user ? (user.fullName || user.email || "User") : "Guest";
+  });
+
+  document.querySelectorAll("[data-auth-email]").forEach((node) => {
+    node.textContent = user?.email || "";
+  });
+}
+
+function wireLogoutLinks() {
+  document.querySelectorAll("[data-auth-logout], [data-shell-logout]").forEach((node) => {
+    if (node.dataset.bound === "true") return;
+    node.dataset.bound = "true";
+
+    node.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await clearSession(`${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`);
+      window.location.replace(GUEST_CHAT_PAGE);
+    });
+  });
+}
+
+function bindPasswordToggleButtons() {
+  document.querySelectorAll("[data-toggle-password]").forEach((btn) => {
+    if (btn.dataset.bound === "true") return;
+    btn.dataset.bound = "true";
+
+    btn.addEventListener("click", () => {
+      const targetId = btn.getAttribute("data-target");
+      const input = targetId ? $(targetId) : null;
+      if (!input) return;
+
+      const nextType = input.type === "password" ? "text" : "password";
+      input.type = nextType;
+      btn.textContent = nextType === "password" ? "Show" : "Hide";
+      btn.setAttribute(
+        "aria-label",
+        nextType === "password" ? "Show password" : "Hide password"
+      );
+    });
+  });
+}
+
 export function currentUser() {
   return getStoredUser();
 }
@@ -273,7 +344,9 @@ export async function clearSession(redirectTo = null) {
   }
 }
 
-async function requireAuth(redirectTo = `${LOGIN_PAGE}?next=${encodeURIComponent(PROFILE_PAGE)}`) {
+async function requireAuth(
+  redirectTo = `${LOGIN_PAGE}?next=${encodeURIComponent(PROFILE_PAGE)}`
+) {
   const cached = currentUser();
   if (cached) return cached;
 
@@ -285,59 +358,6 @@ async function requireAuth(redirectTo = `${LOGIN_PAGE}?next=${encodeURIComponent
   }
 
   return user;
-}
-
-function renderAuthHeader() {
-  const user = currentUser();
-
-  document.querySelectorAll("[data-auth-label]").forEach((node) => {
-    node.textContent = user ? (user.fullName || user.email || "User") : "Guest";
-  });
-
-  document.querySelectorAll("[data-auth-email]").forEach((node) => {
-    node.textContent = user?.email || "";
-  });
-
-  document.querySelectorAll("[data-auth-login]").forEach((node) => {
-    node.hidden = !!user;
-  });
-
-  document.querySelectorAll("[data-auth-logout]").forEach((node) => {
-    node.hidden = !user;
-  });
-
-  document.querySelectorAll("[data-auth-logout]").forEach((node) => {
-    if (node.dataset.bound === "true") return;
-    node.dataset.bound = "true";
-
-    node.addEventListener("click", async (e) => {
-      e.preventDefault();
-      await clearSession(
-        `${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`
-      );
-    });
-  });
-}
-
-function bindPasswordToggleButtons() {
-  document.querySelectorAll("[data-toggle-password]").forEach((btn) => {
-    if (btn.dataset.bound === "true") return;
-    btn.dataset.bound = "true";
-
-    btn.addEventListener("click", () => {
-      const targetId = btn.getAttribute("data-target");
-      const input = targetId ? $(targetId) : null;
-      if (!input) return;
-
-      const nextType = input.type === "password" ? "text" : "password";
-      input.type = nextType;
-      btn.textContent = nextType === "password" ? "Show" : "Hide";
-      btn.setAttribute(
-        "aria-label",
-        nextType === "password" ? "Show password" : "Hide password"
-      );
-    });
-  });
 }
 
 async function initLogin() {
@@ -433,6 +453,11 @@ async function initSignup() {
       return;
     }
 
+    if (!$("terms")?.checked) {
+      showNotice(notice, "Please agree to the terms and privacy policy.", "error");
+      return;
+    }
+
     if (!isEmail(email)) {
       showNotice(notice, "Enter a valid email address.", "error");
       return;
@@ -450,16 +475,16 @@ async function initSignup() {
 
     setBusy(btn, true, "Creating account...");
 
-    const redirectTo = getRedirectUrl(`${RESET_PAGE}?source=signup`);
+    const redirectTo = getRedirectUrl(
+      `${LOGIN_PAGE}?message=${encodeURIComponent("Check your email to verify your account.")}`
+    );
 
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectTo,
-        data: {
-          full_name: fullName,
-        },
+        data: { full_name: fullName },
       },
     });
 
@@ -487,7 +512,7 @@ async function initSignup() {
 }
 
 async function initForgotPassword() {
-  const form = $("forgotForm");
+  const form = $("forgotPasswordForm");
   if (!form || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
 
@@ -527,7 +552,7 @@ async function initForgotPassword() {
 }
 
 async function initResetPassword() {
-  const form = $("resetForm");
+  const form = $("resetPasswordForm");
   if (!form || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
 
@@ -543,8 +568,8 @@ async function initResetPassword() {
     e.preventDefault();
     clearNotice(notice);
 
-    const password = $("resetPassword")?.value || "";
-    const confirm = $("resetConfirmPassword")?.value || "";
+    const password = $("newPassword")?.value || "";
+    const confirm = $("confirmNewPassword")?.value || "";
 
     if (password.length < 8) {
       showNotice(notice, "Password must be at least 8 characters.", "error");
@@ -558,9 +583,7 @@ async function initResetPassword() {
 
     setBusy(btn, true, "Updating password...");
 
-    const { error } = await supabase.auth.updateUser({
-      password,
-    });
+    const { error } = await supabase.auth.updateUser({ password });
 
     setBusy(btn, false);
 
@@ -576,91 +599,56 @@ async function initResetPassword() {
   });
 }
 
-async function initProfile() {
-  const user = await requireAuth();
+function formatJoinedDate(user) {
+  const raw = user?.created_at || user?.updated_at || "";
+  if (!raw) return "—";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function initProfile() {
+  const user = currentUser();
   if (!user) return;
 
-  const form = $("profileForm");
-  if (!form || form.dataset.bound === "true") return;
-  form.dataset.bound = "true";
-
-  const notice = $("profileNotice");
-  const btn = $("profileBtn");
-
+  const badge = $("currentUserBadge");
+  const name = $("currentUserName");
+  const email = $("currentUserEmail");
   const profileName = $("profileName");
   const profileEmail = $("profileEmail");
-  const profileInitials = $("profileInitials");
-  const profilePlan = $("profilePlan");
-  const profileCoins = $("profileCoins");
+  const profileStatus = $("profileStatus");
+  const profileJoined = $("profileJoined");
+  const logoutBtn = $("logoutBtn");
 
-  const name = user.fullName || user.user_metadata?.full_name || user.email || "User";
+  const displayName = user.fullName || user.user_metadata?.full_name || user.email || "User";
+  const displayEmail = user.email || "—";
 
-  if (profileName) profileName.value = name;
-  if (profileEmail) profileEmail.value = user.email || "";
-  if (profileInitials) profileInitials.textContent = getInitials(name);
+  if (badge) badge.textContent = getInitials(displayName);
+  if (name) name.textContent = displayName;
+  if (email) email.textContent = displayEmail;
+  if (profileName) profileName.textContent = displayName;
+  if (profileEmail) profileEmail.textContent = displayEmail;
+  if (profileStatus) {
+    profileStatus.textContent = user.email_confirmed_at || user.confirmed_at ? "Verified" : "Unverified";
+  }
+  if (profileJoined) profileJoined.textContent = formatJoinedDate(user);
 
-  const { data: profileRow } = await supabase
-    .from("profiles")
-    .select("plan,coins,avatar_url,full_name,email")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profilePlan) profilePlan.textContent = profileRow?.plan || "free";
-  if (profileCoins) profileCoins.textContent = String(profileRow?.coins ?? 0);
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    clearNotice(notice);
-
-    const newName = profileName?.value?.trim() || "";
-    const avatarUrl = $("profileAvatarUrl")?.value?.trim() || "";
-
-    setBusy(btn, true, "Saving...");
-
-    const { error: authError } = await supabase.auth.updateUser({
-      data: {
-        full_name: newName,
-      },
+  if (logoutBtn && logoutBtn.dataset.bound !== "true") {
+    logoutBtn.dataset.bound = "true";
+    logoutBtn.addEventListener("click", async () => {
+      await clearSession(`${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`);
+      window.location.replace(GUEST_CHAT_PAGE);
     });
+  }
+}
 
-    if (authError) {
-      setBusy(btn, false);
-      showNotice(notice, authError.message, "error");
-      return;
-    }
-
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        full_name: newName,
-        avatar_url: avatarUrl || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
-
-    setBusy(btn, false);
-
-    if (profileError) {
-      showNotice(notice, profileError.message, "error");
-      return;
-    }
-
-    const nextSession = getAuthSession();
-    if (nextSession?.user) {
-      cacheAuthState({
-        ...nextSession,
-        user: {
-          ...nextSession.user,
-          user_metadata: {
-            ...(nextSession.user.user_metadata || {}),
-            full_name: newName,
-          },
-        },
-      });
-    }
-
-    showNotice(notice, "Profile updated.", "success");
-  });
+function initSettings() {
+  const user = currentUser();
+  if (!user) return;
 }
 
 async function redirectIfAlreadyLoggedIn() {
@@ -677,23 +665,10 @@ async function redirectIfAlreadyLoggedIn() {
   return false;
 }
 
-function wireGenericAuthButtons() {
-  document.querySelectorAll("[data-auth-logout]").forEach((node) => {
-    if (node.dataset.bound === "true") return;
-    node.dataset.bound = "true";
-
-    node.addEventListener("click", async (e) => {
-      e.preventDefault();
-      await clearSession(
-        `${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`
-      );
-    });
-  });
-}
-
 function renderPageState() {
   renderAuthHeader();
-  wireGenericAuthButtons();
+  wireLogoutLinks();
+  bindBackButtons();
 }
 
 async function bootstrapAuth() {
@@ -703,8 +678,10 @@ async function bootstrapAuth() {
 
   renderPageState();
 
-  if (isProfilePage()) {
-    await initProfile();
+  if (isProtectedPage()) {
+    await requireAuth();
+    if (pageName() === PROFILE_PAGE) initProfile();
+    if (pageName() === SETTINGS_PAGE) initSettings();
     return;
   }
 
