@@ -134,7 +134,10 @@ function createFetchError(provider, response, data) {
     data?.msg ||
     "Unknown provider error";
 
-  return new Error(`${provider} failed: ${status} — ${apiMessage}`);
+  const error = new Error(`${provider} failed: ${status} — ${apiMessage}`);
+  error.status = response?.status || 0;
+  error.provider = provider;
+  return error;
 }
 
 function buildOpenAIInput(messages, systemPrompt) {
@@ -166,16 +169,54 @@ function buildOpenAIInput(messages, systemPrompt) {
   return input;
 }
 
+function getOpenAIModelCandidates() {
+  const primary = getEnv("OPENAI_MODEL", "gpt-4.1-mini");
+  const fallbackEnv = getEnv("OPENAI_MODEL_FALLBACKS", "gpt-4o-mini");
+  const raw = [primary, ...fallbackEnv.split(",")];
+
+  const seen = new Set();
+  const models = [];
+
+  for (const item of raw) {
+    const model = cleanText(item);
+    if (!model || seen.has(model)) continue;
+    seen.add(model);
+    models.push(model);
+  }
+
+  return models.length ? models : ["gpt-4.1-mini", "gpt-4o-mini"];
+}
+
+function isLikelyModelError(error) {
+  const text = String(error?.message || "").toLowerCase();
+  const status = Number(error?.status || 0);
+
+  if ([400, 404, 422].includes(status)) return true;
+
+  return (
+    text.includes("model") &&
+    (
+      text.includes("not found") ||
+      text.includes("does not exist") ||
+      text.includes("invalid") ||
+      text.includes("unknown") ||
+      text.includes("unsupported") ||
+      text.includes("permission")
+    )
+  );
+}
+
 async function callOpenAI({
   messages,
   systemPrompt,
   maxTokens = 900,
   webSearch = false,
+  model,
 }) {
   const apiKey = getEnv("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY is missing");
 
-  const model = getEnv("OPENAI_MODEL", "gpt-5.6");
+  const chosenModel = cleanText(model || getEnv("OPENAI_MODEL", "gpt-4.1-mini"));
   const input = buildOpenAIInput(messages, systemPrompt);
   const tools = webSearch ? [{ type: "web_search" }] : undefined;
 
@@ -186,7 +227,7 @@ async function callOpenAI({
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model,
+      model: chosenModel,
       input,
       tools,
       tool_choice: webSearch ? "auto" : "none",
@@ -205,7 +246,7 @@ async function callOpenAI({
 
   return {
     provider: "openai",
-    model,
+    model: chosenModel,
     text,
     raw: data,
   };
@@ -333,6 +374,47 @@ async function callGemini({
   };
 }
 
+async function attemptOpenAIProvider({
+  messages,
+  systemPrompt,
+  temperature,
+  maxTokens,
+  webSearch,
+}) {
+  const modelCandidates = getOpenAIModelCandidates();
+  let lastError = null;
+  const attempts = [];
+
+  for (const model of modelCandidates) {
+    try {
+      return await callOpenAI({
+        messages,
+        systemPrompt,
+        maxTokens,
+        webSearch,
+        model,
+      });
+    } catch (error) {
+      lastError = error;
+      attempts.push({
+        provider: "openai",
+        model,
+        error: error?.message || String(error),
+      });
+
+      if (!isLikelyModelError(error)) {
+        const wrapped = new Error(error?.message || "OpenAI request failed");
+        wrapped.attempts = attempts;
+        throw wrapped;
+      }
+    }
+  }
+
+  const finalError = new Error(lastError?.message || "OpenAI failed");
+  finalError.attempts = attempts;
+  throw finalError;
+}
+
 async function generateReply({
   messages,
   systemPrompt = "",
@@ -350,9 +432,10 @@ async function generateReply({
       let result;
 
       if (item === "openai") {
-        result = await callOpenAI({
+        result = await attemptOpenAIProvider({
           messages,
           systemPrompt,
+          temperature,
           maxTokens,
           webSearch,
         });
@@ -398,10 +481,15 @@ async function generateReply({
       };
     } catch (error) {
       lastError = error;
-      attempts.push({
-        provider: item,
-        error: error?.message || String(error),
-      });
+
+      if (Array.isArray(error?.attempts) && error.attempts.length) {
+        attempts.push(...error.attempts);
+      } else {
+        attempts.push({
+          provider: item,
+          error: error?.message || String(error),
+        });
+      }
     }
   }
 
