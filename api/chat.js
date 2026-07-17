@@ -37,22 +37,76 @@ function normalizeMessageItem(item) {
 
 function normalizeMessages(body) {
   if (Array.isArray(body.messages)) {
-    const messages = body.messages
-      .map(normalizeMessageItem)
-      .filter(Boolean);
-
+    const messages = body.messages.map(normalizeMessageItem).filter(Boolean);
     if (messages.length) return messages;
   }
 
-  const fallbackText = String(
-    body.message ?? body.prompt ?? body.text ?? ""
-  ).trim();
+  const fallbackText = String(body.message ?? body.prompt ?? body.text ?? "").trim();
 
   if (fallbackText) {
     return [{ role: "user", content: fallbackText }];
   }
 
   return [];
+}
+
+function setSseHeaders(res) {
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+}
+
+function writeSse(res, payload) {
+  const data =
+    typeof payload === "string" ? payload : JSON.stringify(payload);
+  res.write(`data: ${data}\n\n`);
+}
+
+function splitTextIntoChunks(text, size = 120) {
+  const value = String(text || "");
+  if (!value) return [];
+
+  const chunks = [];
+  let index = 0;
+
+  while (index < value.length) {
+    let end = Math.min(index + size, value.length);
+
+    if (end < value.length) {
+      const lastSpace = value.lastIndexOf(" ", end);
+      if (lastSpace > index + 30) {
+        end = lastSpace + 1;
+      }
+    }
+
+    const chunk = value.slice(index, end);
+    if (chunk) chunks.push(chunk);
+    index = end;
+  }
+
+  return chunks;
+}
+
+async function streamReply(res, text) {
+  const chunks = splitTextIntoChunks(text, 120);
+
+  if (!chunks.length) {
+    writeSse(res, { delta: "" });
+    writeSse(res, "[DONE]");
+    return;
+  }
+
+  for (const chunk of chunks) {
+    writeSse(res, { delta: chunk });
+  }
+
+  writeSse(res, "[DONE]");
 }
 
 module.exports = async function handler(req, res) {
@@ -110,19 +164,15 @@ module.exports = async function handler(req, res) {
       webSearch,
     });
 
-    return json(res, 200, {
-      ok: true,
-      provider: result.provider,
-      model: result.model,
-      reply: result.text,
-      attempts: result.attempts || [],
-    });
+    setSseHeaders(res);
+    await streamReply(res, result.text);
+
+    return res.end();
   } catch (error) {
     console.error("PassSabi AI API error:", error);
     return json(res, 503, {
       ok: false,
-      error:
-        "PassSabi AI is busy right now. Please try again in a minute.",
+      error: "PassSabi AI is busy right now. Please try again in a minute.",
       attempts: error?.attempts || [],
     });
   }
