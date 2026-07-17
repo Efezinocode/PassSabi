@@ -97,7 +97,7 @@ module.exports = async function handler(req, res) {
     if (!messages.length) {
       return json(res, 400, {
         ok: false,
-        error: "messages is required",
+        error: "Please send a message and try again.",
       });
     }
 
@@ -118,9 +118,11 @@ module.exports = async function handler(req, res) {
       attempts: result.attempts || [],
     });
   } catch (error) {
-    return json(res, 500, {
+    console.error("PassSabi AI API error:", error);
+    return json(res, 503, {
       ok: false,
-      error: error?.message || "Server error",
+      error:
+        "PassSabi AI is busy right now. Please try again in a minute.",
       attempts: error?.attempts || [],
     });
   }
