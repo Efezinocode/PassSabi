@@ -1,40 +1,31 @@
 // js/supabase.js
-
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-const SUPABASE_URL = "https://ryfjziuynqhyfrsqiqmq.supabase.co";
+const SUPABASE_URL =
+  window.__PASSSABI_SUPABASE_URL__ ||
+  "https://ryfjziuynqhyfrsqiqmq.supabase.co";
+
 const SUPABASE_ANON_KEY =
+  window.__PASSSABI_SUPABASE_ANON_KEY__ ||
   "sb_publishable_Ca_4_AhaSQJX69-M_AsIuQ_rHRcUxVU";
 
-export const supabase = createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storage: window.localStorage,
-      flowType: "pkce",
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error("Supabase config is missing.");
+}
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window.localStorage,
+  },
+  global: {
+    headers: {
+      "X-Client-Info": "PassSabi-AI-Web",
     },
-    global: {
-      headers: {
-        "X-Client-Info": "PassSabi-AI-Web",
-      },
-    },
-  }
-);
-
-// Make debugging easier
-window.supabase = supabase;
-
-// Log auth state changes
-supabase.auth.onAuthStateChange((event, session) => {
-  console.log("Supabase Auth:", event);
-
-  if (session) {
-    console.log("Logged in:", session.user.email);
-  } else {
-    console.log("No active session");
-  }
+  },
 });
+
+// Helpful for debugging in the browser console
+window.supabase = supabase;
