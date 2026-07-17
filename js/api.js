@@ -1,290 +1,136 @@
 // js/api.js
 
-const DEFAULT_CHAT_ENDPOINT = "/api/chat";
-const DEFAULT_TIMEOUT_MS = 90000;
-const DEFAULT_RETRY_DELAY_MS = 1200;
-
-function safeJsonParse(value, fallback = null) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizeText(value) {
-  return String(value ?? "").replace(/\r\n/g, "\n");
-}
-
-function extractErrorMessage(bodyText, fallbackStatus) {
-  const parsed = safeJsonParse(bodyText, null);
-
-  if (parsed && typeof parsed === "object") {
-    return (
-      parsed.error ||
-      parsed.message ||
-      parsed.detail ||
-      parsed.msg ||
-      `Request failed with status ${fallbackStatus}`
-    );
-  }
-
-  if (typeof bodyText === "string" && bodyText.trim()) {
-    return bodyText.trim();
-  }
-
-  return `Request failed with status ${fallbackStatus}`;
-}
-
 export function extractSseData(block) {
-  const text = normalizeText(block);
-  if (!text) return "";
+  if (!block) return "";
 
-  const lines = text.split("\n");
-  const dataLines = [];
-
-  for (const line of lines) {
-    if (!line.startsWith("data:")) continue;
-
-    let value = line.slice(5);
-    if (value.startsWith(" ")) value = value.slice(1);
-
-    if (value === "[DONE]") continue;
-    dataLines.push(value);
-  }
-
-  return dataLines.join("\n");
-}
-
-function decodeChunk(buffer, chunk) {
-  return buffer + chunk;
-}
-
-function createTimeoutSignal(signal, timeoutMs) {
-  if (typeof AbortController === "undefined") {
-    return { signal, clear: () => {} };
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  if (signal) {
-    if (signal.aborted) controller.abort();
-    else {
-      signal.addEventListener(
-        "abort",
-        () => controller.abort(),
-        { once: true }
-      );
-    }
-  }
-
-  return {
-    signal: controller.signal,
-    clear: () => clearTimeout(timeoutId),
-  };
-}
-
-async function readErrorText(response) {
-  try {
-    const text = await response.text();
-    return extractErrorMessage(text, response.status);
-  } catch {
-    return `Request failed with status ${response.status}`;
-  }
-}
-
-function makeStreamUrl(endpoint) {
-  return endpoint || DEFAULT_CHAT_ENDPOINT;
-}
-
-function normalizeMessagesInput({ messages, message }) {
-  if (Array.isArray(messages) && messages.length) {
-    return messages
-      .filter((m) => m && typeof m === "object")
-      .map((m) => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: String(m.content ?? m.text ?? ""),
-      }))
-      .filter((m) => m.content.trim().length > 0);
-  }
-
-  const text = String(message ?? "").trim();
-  if (!text) return [];
-
-  return [{ role: "user", content: text }];
+  return block
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trim())
+    .join("\n");
 }
 
 export async function streamChatReply({
-  messages,
   message,
-  provider,
+  provider = "openai",
   signal,
-  onChunk,
-  onDone,
-  onError,
-  endpoint = DEFAULT_CHAT_ENDPOINT,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-  systemPrompt,
-  temperature,
-  maxTokens,
-  webSearch,
-} = {}) {
-  const normalizedMessages = normalizeMessagesInput({ messages, message });
+  onChunk = () => {},
+  onDone = () => {},
+}) {
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    signal,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message,
+      provider,
+    }),
+  });
 
-  const payload = {
-    messages: normalizedMessages,
-  };
+  // Handle API errors
+  if (!response.ok) {
+    let errorMessage = "Something went wrong.";
 
-  if (typeof systemPrompt === "string" && systemPrompt.trim()) {
-    payload.systemPrompt = systemPrompt.trim();
-  }
-  if (typeof temperature === "number") {
-    payload.temperature = temperature;
-  }
-  if (typeof maxTokens === "number") {
-    payload.maxTokens = maxTokens;
-  }
-  if (typeof webSearch === "boolean") {
-    payload.webSearch = webSearch;
-  }
-  if (provider) {
-    payload.provider = provider;
-  }
-
-  const { signal: timeoutSignal, clear } = createTimeoutSignal(signal, timeoutMs);
-
-  try {
-    const response = await fetch(makeStreamUrl(endpoint), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: timeoutSignal,
-    });
-
-    if (!response.ok) {
-      const errorText = await readErrorText(response);
-      throw new Error(errorText);
+    try {
+      const data = await response.json();
+      errorMessage = data.error || errorMessage;
+    } catch {
+      errorMessage = await response.text();
     }
 
-    if (!response.body) {
-      const fallbackText = await response.text();
-      const parsed = safeJsonParse(fallbackText, null);
-      const text =
-        typeof parsed === "string"
-          ? parsed
-          : parsed?.reply || parsed?.text || fallbackText || "";
-      if (text && onChunk) onChunk(String(text));
-      if (onDone) onDone({ provider: provider || null, text: String(text || "") });
-      return String(text || "");
-    }
+    throw new Error(errorMessage);
+  }
 
+  // -------------------------------
+  // SSE STREAM
+  // -------------------------------
+
+  const contentType = response.headers.get("content-type") || "";
+
+  if (
+    contentType.includes("text/event-stream") &&
+    response.body
+  ) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+
     let buffer = "";
     let fullText = "";
 
     while (true) {
       const { done, value } = await reader.read();
+
       if (done) break;
 
-      buffer = decodeChunk(buffer, decoder.decode(value, { stream: true }));
-      const parts = buffer.split(/\n\n|\r\n\r\n|\r\r/g);
-      buffer = parts.pop() || "";
+      buffer += decoder.decode(value, {
+        stream: true,
+      });
 
-      for (const part of parts) {
-        const data = extractSseData(part);
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
+
+      for (const event of events) {
+        const data = extractSseData(event);
+
         if (!data) continue;
-        if (data === "[DONE]") continue;
 
-        let chunkText = data;
+        if (data === "[DONE]") {
+          onDone({
+            provider,
+            text: fullText,
+          });
 
-        const parsed = safeJsonParse(data, null);
-        if (parsed && typeof parsed === "object") {
-          chunkText =
-            parsed.delta ??
-            parsed.text ??
-            parsed.content ??
-            parsed.message ??
-            parsed.reply ??
-            parsed.token ??
-            "";
+          return fullText;
         }
 
-        if (chunkText !== "") {
-          fullText += String(chunkText);
-          if (onChunk) onChunk(fullText);
-        }
-      }
-    }
+        try {
+          const json = JSON.parse(data);
 
-    if (buffer.trim()) {
-      const tail = extractSseData(buffer);
-      if (tail && tail !== "[DONE]") {
-        const parsed = safeJsonParse(tail, null);
-        const tailText =
-          parsed && typeof parsed === "object"
-            ? parsed.delta ??
-              parsed.text ??
-              parsed.content ??
-              parsed.message ??
-              parsed.reply ??
-              parsed.token ??
-              ""
-            : tail;
+          if (json.delta) {
+            fullText += json.delta;
 
-        if (tailText !== "") {
-          fullText += String(tailText);
-          if (onChunk) onChunk(fullText);
+            onChunk({
+              delta: json.delta,
+              fullText,
+            });
+          }
+        } catch {
+          // ignore malformed chunk
         }
       }
     }
 
-    if (onDone) onDone({ provider: provider || null, text: fullText });
+    onDone({
+      provider,
+      text: fullText,
+    });
+
     return fullText;
-  } catch (error) {
-    if (onError) onError(error);
-    throw error;
-  } finally {
-    clear();
-  }
-}
-
-export async function retryStreamChatReply(options = {}) {
-  const {
-    retries = 2,
-    retryDelayMs = DEFAULT_RETRY_DELAY_MS,
-    onError,
-  } = options;
-
-  let lastError = null;
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await streamChatReply(options);
-    } catch (error) {
-      lastError = error;
-      if (onError) onError(error, attempt);
-
-      if (attempt < retries) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, retryDelayMs * (attempt + 1))
-        );
-        continue;
-      }
-    }
   }
 
-  throw lastError || new Error("Request failed.");
-}
+  // -------------------------------
+  // NORMAL JSON
+  // -------------------------------
 
-export function stopStream(controller) {
-  if (!controller) return;
-  try {
-    controller.abort();
-  } catch {
-    // ignore
-  }
+  const json = await response.json();
+
+  const text =
+    json.text ||
+    json.reply ||
+    json.message ||
+    "";
+
+  onChunk({
+    delta: text,
+    fullText: text,
+  });
+
+  onDone({
+    provider,
+    text,
+  });
+
+  return text;
 }
