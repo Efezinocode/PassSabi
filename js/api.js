@@ -16,6 +16,26 @@ function normalizeText(value) {
   return String(value ?? "").replace(/\r\n/g, "\n");
 }
 
+function extractErrorMessage(bodyText, fallbackStatus) {
+  const parsed = safeJsonParse(bodyText, null);
+
+  if (parsed && typeof parsed === "object") {
+    return (
+      parsed.error ||
+      parsed.message ||
+      parsed.detail ||
+      parsed.msg ||
+      `Request failed with status ${fallbackStatus}`
+    );
+  }
+
+  if (typeof bodyText === "string" && bodyText.trim()) {
+    return bodyText.trim();
+  }
+
+  return `Request failed with status ${fallbackStatus}`;
+}
+
 export function extractSseData(block) {
   const text = normalizeText(block);
   if (!text) return "";
@@ -67,7 +87,8 @@ function createTimeoutSignal(signal, timeoutMs) {
 
 async function readErrorText(response) {
   try {
-    return (await response.text()) || `Request failed with status ${response.status}`;
+    const text = await response.text();
+    return extractErrorMessage(text, response.status);
   } catch {
     return `Request failed with status ${response.status}`;
   }
