@@ -1,4 +1,3 @@
-// js/auth.js
 import { supabase } from "./supabase.js";
 import { migrateGuestDataToUser } from "./storage.js";
 
@@ -21,7 +20,6 @@ let authReadyPromise = null;
 let authSubscription = null;
 let authBootstrapped = false;
 let lastMigratedUserId = "";
-let verificationResendLock = false;
 
 function currentPath() {
   return window.location.pathname.split("/").pop() || "";
@@ -320,9 +318,6 @@ function isVerificationProblem(message) {
 }
 
 async function resendVerificationEmail(email, notice) {
-  if (verificationResendLock) return;
-  verificationResendLock = true;
-
   try {
     const { error } = await supabase.auth.resend({
       type: "signup",
@@ -352,8 +347,6 @@ async function resendVerificationEmail(email, notice) {
       `I could not resend the verification email: ${error?.message || "Unknown error"}`,
       "error"
     );
-  } finally {
-    verificationResendLock = false;
   }
 }
 
@@ -397,10 +390,8 @@ export async function clearSession(redirectTo = null) {
 async function requireAuth(
   redirectTo = `${LOGIN_PAGE}?next=${encodeURIComponent(PROFILE_PAGE)}`
 ) {
-  const cached = currentUser();
-  if (cached) return cached;
-
   await ensureAuthReady();
+
   const user = currentUser();
   if (!user) {
     window.location.replace(redirectTo);
@@ -689,14 +680,17 @@ function initProfile() {
   if (profileName) profileName.textContent = displayName;
   if (profileEmail) profileEmail.textContent = displayEmail;
   if (profileStatus) {
-    profileStatus.textContent = user.email_confirmed_at || user.confirmed_at ? "Verified" : "Unverified";
+    profileStatus.textContent =
+      user.email_confirmed_at || user.confirmed_at ? "Verified" : "Unverified";
   }
   if (profileJoined) profileJoined.textContent = formatJoinedDate(user);
 
   if (logoutBtn && logoutBtn.dataset.bound !== "true") {
     logoutBtn.dataset.bound = "true";
     logoutBtn.addEventListener("click", async () => {
-      await clearSession(`${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`);
+      await clearSession(
+        `${LOGIN_PAGE}?message=${encodeURIComponent("You have been logged out.")}`
+      );
       window.location.replace(GUEST_CHAT_PAGE);
     });
   }
