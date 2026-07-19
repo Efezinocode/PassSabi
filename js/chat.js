@@ -363,7 +363,6 @@ export function buildStudyModePrompt(message) {
   }
   return null;
 }
-
 export function buildLessonPrompt(action, answerText) {
   const lastUser = [...(currentSession()?.messages || [])]
     .reverse()
@@ -431,7 +430,17 @@ async function startGeneration({
       message: buildModelPrompt(finalText),
       signal: controller.signal,
       onChunk: (chunk) => {
-        full = String(chunk || "");
+        if (typeof chunk === "object" && chunk !== null) {
+          full =
+            chunk.text ||
+            chunk.reply ||
+            chunk.message ||
+            chunk.content ||
+            chunk.choices?.[0]?.message?.content ||
+            "";
+        } else {
+          full = String(chunk || "");
+        }
         hideTyping();
         updateAssistant(full);
       },
