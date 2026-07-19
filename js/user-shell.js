@@ -1,4 +1,3 @@
-// js/user-shell.js
 import { currentUser, clearSession, syncAuthState } from "./auth.js";
 
 const AUTH_RETRY_COUNT = 3;
@@ -12,6 +11,10 @@ function goBackSafely() {
   } else {
     window.location.replace("index.html");
   }
+}
+
+function getLoginUrl() {
+  return `login.html?next=${encodeURIComponent("user-chat.html")}`;
 }
 
 function wireBackButtons() {
@@ -52,6 +55,44 @@ function wireGuestLinks() {
   });
 }
 
+function wireTopbarAuth(user) {
+  const topbar = document.querySelector(".topbar-auth");
+  if (!topbar) return;
+
+  topbar.innerHTML = "";
+
+  if (!user) {
+    const loginLink = document.createElement("a");
+    loginLink.href = getLoginUrl();
+    loginLink.className = "topbar-auth-link";
+    loginLink.textContent = "Login";
+
+    const signupLink = document.createElement("a");
+    signupLink.href = "signup.html";
+    signupLink.className = "topbar-auth-link";
+    signupLink.textContent = "Sign up";
+
+    topbar.appendChild(loginLink);
+    topbar.appendChild(signupLink);
+    return;
+  }
+
+  const name = document.createElement("span");
+  name.className = "topbar-auth-name";
+  name.textContent = user.fullName || user.email || "User";
+
+  const logoutBtn = document.createElement("button");
+  logoutBtn.type = "button";
+  logoutBtn.className = "topbar-auth-link";
+  logoutBtn.textContent = "Logout";
+  logoutBtn.addEventListener("click", async () => {
+    await clearSession("guest-chat.html");
+  });
+
+  topbar.appendChild(name);
+  topbar.appendChild(logoutBtn);
+}
+
 async function getStableUser() {
   for (let attempt = 0; attempt < AUTH_RETRY_COUNT; attempt += 1) {
     await syncAuthState();
@@ -74,9 +115,10 @@ async function renderShellState(redirectIfMissing = true) {
 
   if (!user) {
     wireGuestLinks();
+    wireTopbarAuth(null);
 
     if (redirectIfMissing) {
-      window.location.replace("guest-chat.html");
+      window.location.replace(getLoginUrl());
       return null;
     }
 
@@ -85,6 +127,8 @@ async function renderShellState(redirectIfMissing = true) {
 
   wireUserLinks(user);
   wireLogoutButtons();
+  wireTopbarAuth(user);
+
   return user;
 }
 
