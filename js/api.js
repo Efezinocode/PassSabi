@@ -12,7 +12,7 @@ export function extractSseData(block) {
 
 export async function streamChatReply({
   message,
-  provider = "openai",
+  provider = "xai",
   signal,
   onChunk = () => {},
   onDone = () => {},
@@ -29,7 +29,6 @@ export async function streamChatReply({
     }),
   });
 
-  // Handle API errors
   if (!response.ok) {
     let errorMessage = "Something went wrong.";
 
@@ -43,16 +42,9 @@ export async function streamChatReply({
     throw new Error(errorMessage);
   }
 
-  // -------------------------------
-  // SSE STREAM
-  // -------------------------------
-
   const contentType = response.headers.get("content-type") || "";
 
-  if (
-    contentType.includes("text/event-stream") &&
-    response.body
-  ) {
+  if (contentType.includes("text/event-stream") && response.body) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
 
@@ -109,10 +101,6 @@ export async function streamChatReply({
 
     return fullText;
   }
-
-  // -------------------------------
-  // NORMAL JSON
-  // -------------------------------
 
   const json = await response.json();
 
