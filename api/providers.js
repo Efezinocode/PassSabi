@@ -4,7 +4,9 @@ const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 const XAI_ENDPOINT = "https://api.x.ai/v1/chat/completions";
 const GEMINI_ENDPOINT_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-const DEFAULT_PROVIDER_ORDER = ["openai", "groq", "xai", "gemini"];
+// Default fallback order:
+// xAI first, then Gemini, then OpenAI, then Groq
+const DEFAULT_PROVIDER_ORDER = ["xai", "gemini", "openai", "groq"];
 
 function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -50,19 +52,18 @@ function normalizeMessages(messages) {
     .filter((msg) => msg.content);
 }
 
-function buildProviderOrder(preferredProvider = "openai") {
-  const preferred = cleanText(preferredProvider || "openai").toLowerCase();
+function buildProviderOrder(preferredProvider = "xai") {
+  const preferred = cleanText(preferredProvider || "xai").toLowerCase();
 
   const order = [
-    "openai",
-    ...DEFAULT_PROVIDER_ORDER.filter((provider) => provider !== "openai"),
+    ...DEFAULT_PROVIDER_ORDER.filter((provider) => provider !== preferred),
   ];
 
-  if (preferred && order.includes(preferred)) {
-    return [preferred, ...order.filter((p) => p !== preferred)];
+  if (preferred && DEFAULT_PROVIDER_ORDER.includes(preferred)) {
+    return [preferred, ...order];
   }
 
-  return order;
+  return DEFAULT_PROVIDER_ORDER.slice();
 }
 
 function extractResponseText(data) {
@@ -418,7 +419,7 @@ async function attemptOpenAIProvider({
 async function generateReply({
   messages,
   systemPrompt = "",
-  provider = "openai",
+  provider = "xai",
   temperature = 0.7,
   maxTokens = 900,
   webSearch = false,
