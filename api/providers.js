@@ -5,8 +5,8 @@ const XAI_ENDPOINT = "https://api.x.ai/v1/chat/completions";
 const GEMINI_ENDPOINT_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 // Default fallback order:
-// xAI first, then Gemini, then OpenAI, then Groq
-const DEFAULT_PROVIDER_ORDER = ["xai", "gemini", "openai", "groq"];
+// xAI first, then Groq, then Gemini, then OpenAI
+const DEFAULT_PROVIDER_ORDER = ["xai", "groq", "gemini", "openai"];
 
 function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
