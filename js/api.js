@@ -83,10 +83,7 @@ export async function streamChatReply({
           if (json.delta) {
             fullText += json.delta;
 
-            onChunk({
-              delta: json.delta,
-              fullText,
-            });
+            onChunk(fullText);
           }
         } catch {
           // ignore malformed chunk
@@ -110,10 +107,7 @@ export async function streamChatReply({
     json.message ||
     "";
 
-  onChunk({
-    delta: text,
-    fullText: text,
-  });
+  onChunk(text);
 
   onDone({
     provider,
