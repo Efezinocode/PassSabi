@@ -135,7 +135,7 @@ module.exports = async function handler(req, res) {
     const provider =
       typeof body.provider === "string" && body.provider.trim()
         ? body.provider.trim().toLowerCase()
-        : "openai";
+        : "xai";
 
     const temperature =
       typeof body.temperature === "number" ? body.temperature : 0.7;
