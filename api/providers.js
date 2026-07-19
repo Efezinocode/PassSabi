@@ -324,7 +324,7 @@ async function callGemini({
   const apiKey = getEnv("GEMINI_API_KEY");
   if (!apiKey) throw new Error("GEMINI_API_KEY is missing");
 
-  const model = getEnv("GEMINI_MODEL", "gemini-2.0-flash");
+  const model = getEnv("GEMINI_MODEL", "gemini-2.5-flash");
   const safeMessages = normalizeMessages(messages);
   const instructions = cleanText(systemPrompt);
 
@@ -445,7 +445,7 @@ async function generateReply({
           providerName: "Groq",
           endpoint: GROQ_ENDPOINT,
           apiKey: getEnv("GROQ_API_KEY"),
-          model: getEnv("GROQ_MODEL", "llama-3.1-70b-versatile"),
+          model: getEnv("GROQ_MODEL", "llama-3.3-70b-versatile"),
           messages,
           systemPrompt,
           temperature,
@@ -456,7 +456,7 @@ async function generateReply({
           providerName: "xAI",
           endpoint: XAI_ENDPOINT,
           apiKey: getEnv("XAI_API_KEY"),
-          model: getEnv("XAI_MODEL", "grok-2-latest"),
+          model: getEnv("XAI_MODEL", "grok-4.5"),
           messages,
           systemPrompt,
           temperature,
