@@ -1,9 +1,13 @@
-import { currentUser, clearSession, syncAuthState } from "./auth.js";
+import { supabase } from "./supabase.js";
 
 const AUTH_RETRY_COUNT = 3;
 const AUTH_RETRY_DELAY_MS = 120;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function getLoginUrl() {
+  return `login.html?next=${encodeURIComponent("user-chat.html")}`;
+}
 
 function goBackSafely() {
   if (window.history.length > 1) {
@@ -11,10 +15,6 @@ function goBackSafely() {
   } else {
     window.location.replace("index.html");
   }
-}
-
-function getLoginUrl() {
-  return `login.html?next=${encodeURIComponent("user-chat.html")}`;
 }
 
 function wireBackButtons() {
@@ -27,6 +27,44 @@ function wireBackButtons() {
       goBackSafely();
     });
   });
+}
+
+async function getCurrentUser() {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn("getSession failed:", error);
+      return null;
+    }
+
+    return data?.session?.user || null;
+  } catch (error) {
+    console.warn("getCurrentUser failed:", error);
+    return null;
+  }
+}
+
+async function getStableUser() {
+  for (let attempt = 0; attempt < AUTH_RETRY_COUNT; attempt += 1) {
+    const user = await getCurrentUser();
+    if (user) return user;
+
+    if (attempt < AUTH_RETRY_COUNT - 1) {
+      await sleep(AUTH_RETRY_DELAY_MS);
+    }
+  }
+
+  return null;
+}
+
+async function clearSession(redirectTo = "guest-chat.html") {
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch (error) {
+    console.warn("signOut failed:", error);
+  }
+
+  window.location.replace(redirectTo);
 }
 
 function wireLogoutButtons() {
@@ -44,7 +82,7 @@ function wireLogoutButtons() {
 function wireUserLinks(user) {
   document.querySelectorAll("[data-shell-userlink]").forEach((link) => {
     link.hidden = false;
-    link.textContent = user?.fullName || user?.email || "Profile";
+    link.textContent = user?.user_metadata?.full_name || user?.email || "Profile";
     link.href = "profile.html";
   });
 }
@@ -79,7 +117,7 @@ function wireTopbarAuth(user) {
 
   const name = document.createElement("span");
   name.className = "topbar-auth-name";
-  name.textContent = user.fullName || user.email || "User";
+  name.textContent = user.user_metadata?.full_name || user.email || "User";
 
   const logoutBtn = document.createElement("button");
   logoutBtn.type = "button";
@@ -93,49 +131,78 @@ function wireTopbarAuth(user) {
   topbar.appendChild(logoutBtn);
 }
 
-async function getStableUser() {
-  for (let attempt = 0; attempt < AUTH_RETRY_COUNT; attempt += 1) {
-    await syncAuthState();
+function setSidebarOpen(open) {
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("backdrop");
+  const menuBtn = document.getElementById("menuBtn");
 
-    const user = currentUser();
-    if (user) return user;
+  if (!sidebar || !backdrop) return;
 
-    if (attempt < AUTH_RETRY_COUNT - 1) {
-      await sleep(AUTH_RETRY_DELAY_MS);
-    }
+  sidebar.classList.toggle("open", open);
+  backdrop.classList.toggle("open", open);
+  document.body.classList.toggle("sidebar-open", open);
+
+  sidebar.setAttribute("aria-hidden", String(!open));
+  backdrop.setAttribute("aria-hidden", String(!open));
+
+  if (menuBtn) {
+    menuBtn.setAttribute("aria-expanded", String(open));
   }
-
-  return currentUser();
 }
 
-async function renderShellState(redirectIfMissing = true) {
+function wireSidebarControls() {
+  const menuBtn = document.getElementById("menuBtn");
+  const backdrop = document.getElementById("backdrop");
+  const sidebar = document.getElementById("sidebar");
+
+  if (menuBtn && menuBtn.dataset.bound !== "true") {
+    menuBtn.dataset.bound = "true";
+    menuBtn.addEventListener("click", () => {
+      const isOpen = sidebar?.classList.contains("open");
+      setSidebarOpen(!isOpen);
+    });
+  }
+
+  if (backdrop && backdrop.dataset.bound !== "true") {
+    backdrop.dataset.bound = "true";
+    backdrop.addEventListener("click", () => setSidebarOpen(false));
+  }
+
+  if (sidebar) {
+    sidebar.querySelectorAll("a").forEach((link) => {
+      if (link.dataset.bound === "true") return;
+      link.dataset.bound = "true";
+
+      link.addEventListener("click", () => {
+        setSidebarOpen(false);
+      });
+    });
+  }
+}
+
+async function renderShellState() {
   wireBackButtons();
+  wireSidebarControls();
 
   const user = await getStableUser();
 
   if (!user) {
     wireGuestLinks();
     wireTopbarAuth(null);
-
-    if (redirectIfMissing) {
-      window.location.replace(getLoginUrl());
-      return null;
-    }
-
+    window.location.replace(getLoginUrl());
     return null;
   }
 
   wireUserLinks(user);
   wireLogoutButtons();
   wireTopbarAuth(user);
-
   return user;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await renderShellState(true);
+  await renderShellState();
 });
 
 window.addEventListener("pageshow", async () => {
-  await renderShellState(true);
+  await renderShellState();
 });
