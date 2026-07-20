@@ -13,7 +13,7 @@ import {
 
 import { currentUser } from "./auth.js";
 import { streamChatReply } from "./api.js";
-import { bindSidebarEvents, closeSidebar } from "./sidebar.js";
+import { closeSidebar } from "./sidebar.js";
 import {
   autoResizeInput,
   autoScrollIfNeeded,
@@ -51,7 +51,6 @@ const chatState = {
   activeController: null,
   typingVisible: false,
   lastAssistantBubble: null,
-  lastUserMessageText: "",
 };
 
 const now = () => Date.now();
@@ -309,6 +308,7 @@ function setInputValue(v) {
   input.value = v;
   autoResizeInput(input);
 }
+
 function readInputValue() {
   return String(getChatInput()?.value || "").trim();
 }
@@ -319,10 +319,12 @@ function showTyping() {
   chatState.typingVisible = true;
   scrollToBottom(getChatBox());
 }
+
 function hideTyping() {
   removeTypingPlaceholders(getChatBox());
   chatState.typingVisible = false;
 }
+
 function updateAssistant(text) {
   if (!chatState.lastAssistantBubble) {
     chatState.lastAssistantBubble = createAssistantBubble(getChatBox());
@@ -363,6 +365,7 @@ export function buildStudyModePrompt(message) {
   }
   return null;
 }
+
 export function buildLessonPrompt(action, answerText) {
   const lastUser = [...(currentSession()?.messages || [])]
     .reverse()
@@ -405,7 +408,6 @@ async function startGeneration({
   if (appendUserMessage) {
     session.messages = session.messages || [];
     session.messages.push({ role: "user", text: finalText, ts: now() });
-    chatState.lastUserMessageText = finalText;
   }
 
   if (autoTitle && session.title === "New Chat") {
