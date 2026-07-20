@@ -13,7 +13,6 @@ import {
 
 import { currentUser } from "./auth.js";
 import { streamChatReply } from "./api.js";
-import { closeSidebar } from "./sidebar.js";
 import {
   autoResizeInput,
   autoScrollIfNeeded,
