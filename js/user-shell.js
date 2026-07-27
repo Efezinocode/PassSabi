@@ -1,4 +1,4 @@
-import { supabase } from "./supabase.js";
+import { currentUser, syncAuthState, clearSession } from "./auth.js";
 
 const AUTH_RETRY_COUNT = 3;
 const AUTH_RETRY_DELAY_MS = 120;
@@ -31,13 +31,8 @@ function wireBackButtons() {
 
 async function getCurrentUser() {
   try {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      console.warn("getSession failed:", error);
-      return null;
-    }
-
-    return data?.session?.user || null;
+    await syncAuthState();
+    return currentUser();
   } catch (error) {
     console.warn("getCurrentUser failed:", error);
     return null;
@@ -55,16 +50,6 @@ async function getStableUser() {
   }
 
   return null;
-}
-
-async function clearSession(redirectTo = "guest-chat.html") {
-  try {
-    await supabase.auth.signOut({ scope: "local" });
-  } catch (error) {
-    console.warn("signOut failed:", error);
-  }
-
-  window.location.replace(redirectTo);
 }
 
 function wireLogoutButtons() {
