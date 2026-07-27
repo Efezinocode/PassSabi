@@ -14,6 +14,8 @@ const SUPABASE_ANON_KEY =
   "sb_publishable_Ca_4_AhaSQJX69-M_AsIuQ_rHRcUxVU";
 
 const REMEMBER_ME_KEY = "passsabi_remember_me";
+const AUTH_SESSION_KEY = "passsabi_session_v1";
+const AUTH_USER_KEY = "passsabi_user_v1";
 
 const $ = (selector) => document.getElementById(selector);
 
@@ -92,6 +94,88 @@ function toUser(user) {
   };
 }
 
+function safeStorageGet(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeStorageRemove(key) {
+  try {
+    window.localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readCachedAuthState() {
+  const rawSession = safeStorageGet(AUTH_SESSION_KEY);
+  const rawUser = safeStorageGet(AUTH_USER_KEY);
+
+  if (!rawSession && !rawUser) return null;
+
+  let session = null;
+  let user = null;
+
+  if (rawSession) {
+    try {
+      session = JSON.parse(rawSession);
+    } catch {
+      session = null;
+    }
+  }
+
+  if (rawUser) {
+    try {
+      user = JSON.parse(rawUser);
+    } catch {
+      user = null;
+    }
+  }
+
+  const safeSession = session && typeof session === "object" ? session : null;
+  const safeUser = user && typeof user === "object" ? user : null;
+
+  if (!safeSession && !safeUser) return null;
+
+  if (safeSession && !safeSession.user && safeUser) {
+    safeSession.user = safeUser;
+  }
+
+  const finalUser = toUser(safeSession?.user || safeUser);
+  if (!finalUser) return null;
+
+  return {
+    session: safeSession
+      ? { ...safeSession, user: safeSession.user || finalUser }
+      : { user: finalUser },
+    user: finalUser,
+  };
+}
+
+function writeCachedAuthState(session, user) {
+  if (!session || !user) {
+    safeStorageRemove(AUTH_SESSION_KEY);
+    safeStorageRemove(AUTH_USER_KEY);
+    return;
+  }
+
+  safeStorageSet(AUTH_SESSION_KEY, JSON.stringify(session));
+  safeStorageSet(AUTH_USER_KEY, JSON.stringify(user));
+}
+
 function emitAuthChanged(session, user) {
   window.dispatchEvent(
     new CustomEvent("passsabi:auth-changed", {
@@ -107,6 +191,7 @@ function setAuthState(session) {
   window.__passsabiAuthSession = state.session;
   window.__passsabiAuthUser = state.user;
 
+  writeCachedAuthState(state.session, state.user);
   emitAuthChanged(state.session, state.user);
   return { session: state.session, user: state.user };
 }
@@ -115,11 +200,15 @@ async function loadScript(src) {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`);
     if (existing) {
+      if (existing.dataset.loaded === "true") {
+        resolve();
+        return;
+      }
+
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), {
         once: true,
       });
-      if (existing.dataset.loaded === "true") resolve();
       return;
     }
 
@@ -187,42 +276,6 @@ async function getSupabase() {
   return state.clientPromise;
 }
 
-async function syncAuthState() {
-  const supabase = await getSupabase();
-
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      setAuthState(null);
-      return null;
-    }
-
-    const session = data?.session || null;
-    if (!session) {
-      setAuthState(null);
-      return null;
-    }
-
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user) {
-        const merged = { ...session, user: userData.user };
-        setAuthState(merged);
-        attachAuthListener(supabase);
-        return state.user;
-      }
-    } catch {}
-
-    setAuthState(session);
-    attachAuthListener(supabase);
-    return state.user;
-  } catch (error) {
-    console.warn("syncAuthState failed:", error);
-    setAuthState(null);
-    return null;
-  }
-}
-
 function attachAuthListener(supabase) {
   if (state.listenerAttached) return;
   state.listenerAttached = true;
@@ -233,6 +286,61 @@ function attachAuthListener(supabase) {
     });
   } catch (error) {
     console.warn("Auth listener failed:", error);
+  }
+}
+
+async function syncAuthState() {
+  const supabase = await getSupabase();
+  attachAuthListener(supabase);
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      const cached = readCachedAuthState();
+      if (cached) {
+        setAuthState(cached.session);
+        return state.user;
+      }
+
+      setAuthState(null);
+      return null;
+    }
+
+    let session = data?.session || null;
+
+    if (!session) {
+      const cached = readCachedAuthState();
+      if (cached) {
+        setAuthState(cached.session);
+        return state.user;
+      }
+
+      setAuthState(null);
+      return null;
+    }
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) {
+        session = { ...session, user: userData.user };
+      }
+    } catch {
+      // Keep the session if getUser fails temporarily.
+    }
+
+    setAuthState(session);
+    return state.user;
+  } catch (error) {
+    console.warn("syncAuthState failed:", error);
+
+    const cached = readCachedAuthState();
+    if (cached) {
+      setAuthState(cached.session);
+      return state.user;
+    }
+
+    setAuthState(null);
+    return null;
   }
 }
 
@@ -257,9 +365,11 @@ async function clearSession(redirectTo = null) {
   }
 
   try {
-    localStorage.removeItem("passsabi_session_v1");
-    localStorage.removeItem("passsabi_user_v1");
-    localStorage.removeItem(REMEMBER_ME_KEY);
+    safeStorageRemove(AUTH_SESSION_KEY);
+    safeStorageRemove(AUTH_USER_KEY);
+    safeStorageRemove("passsabi_session_v1");
+    safeStorageRemove("passsabi_user_v1");
+    safeStorageRemove(REMEMBER_ME_KEY);
   } catch {}
 
   setAuthState(null);
@@ -361,6 +471,7 @@ function initLogin() {
         else localStorage.removeItem(REMEMBER_ME_KEY);
       } catch {}
 
+      await syncAuthState().catch(() => {});
       window.location.replace(getNextUrl(USER_CHAT_PAGE));
     } catch (error) {
       showNotice(notice, error?.message || "Login failed. Try again.", "error");
@@ -438,6 +549,7 @@ function initSignup() {
       setAuthState(data?.session || null);
 
       if (data?.session) {
+        await syncAuthState().catch(() => {});
         window.location.replace(getNextUrl(USER_CHAT_PAGE));
         return;
       }
