@@ -1,668 +1,657 @@
-import {
-  createSession,
-  loadSessions,
-  saveSessions,
-  loadCurrentChatId,
-  saveCurrentChatId,
-  makeSessionTitle,
-  migrateLegacyMessages,
-  removeLegacyMessagesKey,
-  updateMemoryFromMessage,
-  buildMemoryPrompt,
-} from "./storage.js";
+import { supabase } from "./supabase.js";
 
-import { currentUser, syncAuthState } from "./auth.js";
-import { streamChatReply } from "./api.js";
-import {
-  autoResizeInput,
-  autoScrollIfNeeded,
-  cleanReply,
-  createAssistantBubble,
-  renderCurrentSession,
-  renderHistory,
-  removeTypingPlaceholders,
-  scrollToBottom,
-  setSendButtonState,
-  setMessageActionHandlers,
-  updateAssistantBubble,
-  updateWelcomeState,
-  appendTypingIndicator,
-} from "./ui.js";
+const LOGIN_PAGE = "login.html";
+const SIGNUP_PAGE = "signup.html";
+const FORGOT_PAGE = "forgot-password.html";
+const RESET_PAGE = "reset-password.html";
+const USER_CHAT_PAGE = "user-chat.html";
 
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => Array.from(document.querySelectorAll(s));
+const AUTH_SESSION_KEYS = ["passsabi_auth_session_v2", "passsabi_session_v1"];
+const AUTH_USER_KEYS = ["passsabi_auth_user_v2", "passsabi_user_v1"];
 
-const CHAT_INPUT_SELECTORS = [
-  "#chatInput",
-  "#userInput",
-  "#messageInput",
-  "textarea[name='message']",
-  "textarea[data-chat-input]",
-].join(",");
+const $ = (id) => document.getElementById(id);
 
-const SEND_BUTTON_SELECTORS = ["#sendBtn", "#sendButton", "button[type='submit']"].join(",");
-const NEW_CHAT_SELECTORS = ["#newChatBtn", "[data-action='new-chat']"].join(",");
-const SEARCH_SELECTORS = ["#chatSearch", "#historySearch", "[data-chat-search]"].join(",");
-
-const chatState = {
-  sessions: [],
-  currentChatId: "",
-  activeController: null,
-  typingVisible: false,
-  lastAssistantBubble: null,
+const state = {
+  booted: false,
+  session: null,
+  user: null,
+  listenerBound: false,
+  initPromise: null,
 };
 
-const now = () => Date.now();
+function pageName() {
+  return (window.location.pathname.split("/").pop() || "").toLowerCase();
+}
+
+function isAuthPage() {
+  return [LOGIN_PAGE, SIGNUP_PAGE, FORGOT_PAGE, RESET_PAGE].includes(pageName());
+}
+
+function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim().toLowerCase());
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readFirstStorage(keys) {
+  for (const key of keys) {
+    try {
+      const value = localStorage.getItem(key);
+      if (value) return value;
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+function writeStorage(keys, value) {
+  for (const key of keys) {
+    try {
+      if (value == null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function parseJson(value) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeUser(user) {
+  if (!user || typeof user !== "object") return null;
+
+  return {
+    id: String(user.id || "").trim(),
+    email: String(user.email || "").trim(),
+    phone: String(user.phone || "").trim(),
+    created_at: user.created_at || "",
+    updated_at: user.updated_at || "",
+    last_sign_in_at: user.last_sign_in_at || "",
+    email_confirmed_at: user.email_confirmed_at || "",
+    confirmed_at: user.confirmed_at || "",
+    user_metadata: user.user_metadata || {},
+    app_metadata: user.app_metadata || {},
+    identities: Array.isArray(user.identities) ? user.identities : [],
+    fullName:
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.user_metadata?.fullName ||
+      "",
+  };
+}
+
+function readCachedAuthState() {
+  const rawSession = readFirstStorage(AUTH_SESSION_KEYS);
+  const rawUser = readFirstStorage(AUTH_USER_KEYS);
+
+  const session = parseJson(rawSession);
+  const cachedUser = parseJson(rawUser);
+
+  if (!session && !cachedUser) return null;
+
+  const user = normalizeUser(session?.user || cachedUser);
+  if (!user) return null;
+
+  return {
+    session: session
+      ? {
+          ...session,
+          user: session.user || user,
+        }
+      : { user },
+    user,
+  };
+}
+
+function emitAuthChanged(session, user) {
+  window.dispatchEvent(
+    new CustomEvent("passsabi:auth-changed", {
+      detail: { session: session || null, user: user || null },
+    })
+  );
+}
+
+function setAuthState(session, user = null) {
+  if (!session) {
+    state.session = null;
+    state.user = null;
+    window.__passsabiAuthSession = null;
+    window.__passsabiAuthUser = null;
+    writeStorage(AUTH_SESSION_KEYS, null);
+    writeStorage(AUTH_USER_KEYS, null);
+    emitAuthChanged(null, null);
+    return null;
+  }
+
+  const nextUser = normalizeUser(user || session.user);
+  state.session = {
+    ...session,
+    user: session.user || nextUser,
+  };
+  state.user = nextUser;
+  window.__passsabiAuthSession = state.session;
+  window.__passsabiAuthUser = state.user;
+
+  writeStorage(AUTH_SESSION_KEYS, JSON.stringify(state.session));
+  writeStorage(AUTH_USER_KEYS, JSON.stringify(state.user));
+  emitAuthChanged(state.session, state.user);
+  return state.user;
+}
+
+function currentUser() {
+  return state.user || window.__passsabiAuthUser || readCachedAuthState()?.user || null;
+}
+
+function getAuthSession() {
+  return state.session || window.__passsabiAuthSession || readCachedAuthState()?.session || null;
+}
 
 function isLoggedIn() {
   return !!currentUser();
 }
 
-function getChatBox() {
-  return $("#chat-box");
-}
-function getWelcomeScreen() {
-  return $("#welcome-screen");
-}
-function getHistoryList() {
-  return $("#chat-history");
-}
-function getChatForm() {
-  return $("#chat-form");
-}
-function getMenuButton() {
-  return $("#menuBtn");
-}
-function getSidebar() {
-  return $("#sidebar");
-}
-function getBackdrop() {
-  return $("#backdrop");
-}
-function getChatInput() {
-  return $(CHAT_INPUT_SELECTORS);
-}
-function getSendButton() {
-  return $(SEND_BUTTON_SELECTORS);
-}
-function getSearchInput() {
-  return $(SEARCH_SELECTORS);
+async function ensureCodeSessionExchange() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("code")) return null;
+
+  const { data, error } = await supabase.auth.exchangeCodeForSession(url.toString());
+  if (error) throw error;
+
+  try {
+    url.searchParams.delete("code");
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // ignore
+  }
+
+  if (data?.session) {
+    setAuthState(data.session, data.session.user);
+  }
+
+  return data?.session || null;
 }
 
-function goBackSafely() {
-  if (window.history.length > 1) {
-    window.history.back();
-  } else {
-    window.location.replace("index.html");
+function bindListenerOnce() {
+  if (state.listenerBound) return;
+  state.listenerBound = true;
+
+  try {
+    supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (nextSession?.user) setAuthState(nextSession, nextSession.user);
+      else setAuthState(null, null);
+    });
+  } catch (error) {
+    console.warn("Auth listener failed:", error);
   }
 }
 
-function wireBackButtons() {
+async function syncAuthState() {
+  bindListenerOnce();
+
+  const cached = readCachedAuthState();
+  if (cached && !state.session && !state.user) {
+    setAuthState(cached.session, cached.user);
+  }
+
+  try {
+    await ensureCodeSessionExchange();
+  } catch (error) {
+    console.warn("Auth code exchange failed:", error);
+  }
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error || !data?.session) {
+      setAuthState(null, null);
+      return null;
+    }
+
+    let session = data.session;
+    let user = session.user || null;
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) user = userData.user;
+    } catch {
+      // keep session.user
+    }
+
+    setAuthState(session, user);
+    return state.user;
+  } catch (error) {
+    console.warn("syncAuthState failed:", error);
+
+    if (cached) {
+      setAuthState(cached.session, cached.user);
+      return state.user;
+    }
+
+    setAuthState(null, null);
+    return null;
+  }
+}
+
+async function ensureAuthReady() {
+  if (!state.initPromise) {
+    state.initPromise = syncAuthState().catch((error) => {
+      console.warn("Initial auth boot failed:", error);
+      return null;
+    });
+  }
+  return state.initPromise;
+}
+
+async function waitForAuthUser(timeoutMs = 1400, intervalMs = 80) {
+  await ensureAuthReady();
+  const end = Date.now() + timeoutMs;
+
+  while (Date.now() < end) {
+    const user = currentUser();
+    if (user) return user;
+    await sleep(intervalMs);
+  }
+
+  return currentUser();
+}
+
+function getNextUrl(defaultUrl = USER_CHAT_PAGE) {
+  const params = new URLSearchParams(window.location.search);
+  const next = params.get("next");
+  if (!next) return defaultUrl;
+  if (/^https?:\/\//i.test(next)) return defaultUrl;
+  return next.trim() || defaultUrl;
+}
+
+function getRedirectUrl(path) {
+  return new URL(path, window.location.href).toString();
+}
+
+function showNotice(el, message, type = "info") {
+  if (!el) return;
+  el.className = `notice show ${type}`;
+  el.textContent = message;
+}
+
+function clearNotice(el) {
+  if (!el) return;
+  el.className = "notice";
+  el.textContent = "";
+}
+
+function setBusy(btn, busy, busyText) {
+  if (!btn) return;
+  if (!btn.dataset.defaultText) btn.dataset.defaultText = btn.textContent;
+  btn.disabled = busy;
+  btn.textContent = busy ? busyText : btn.dataset.defaultText;
+}
+
+function bindPasswordToggles() {
+  document.querySelectorAll("[data-toggle-password]").forEach((btn) => {
+    if (btn.dataset.bound === "true") return;
+    btn.dataset.bound = "true";
+
+    btn.addEventListener("click", () => {
+      const targetId = btn.getAttribute("data-target");
+      const input = targetId ? $(targetId) : null;
+      if (!input) return;
+
+      input.type = input.type === "password" ? "text" : "password";
+      btn.textContent = input.type === "password" ? "Show" : "Hide";
+    });
+  });
+}
+
+function bindBackButtons() {
   document.querySelectorAll("[data-back-button]").forEach((btn) => {
     if (btn.dataset.bound === "true") return;
     btn.dataset.bound = "true";
+
     btn.addEventListener("click", (e) => {
       e.preventDefault();
-      goBackSafely();
+      if (window.history.length > 1) window.history.back();
+      else window.location.replace("index.html");
     });
   });
 }
 
-function openSidebarPanel() {
-  const sidebar = getSidebar();
-  const backdrop = getBackdrop();
-  const menuBtn = getMenuButton();
-
-  if (sidebar) sidebar.classList.add("open");
-  if (backdrop) backdrop.classList.add("show");
-  if (menuBtn) menuBtn.setAttribute("aria-expanded", "true");
-  document.body.classList.add("sidebar-open");
-}
-
-function closeSidebarPanel() {
-  const sidebar = getSidebar();
-  const backdrop = getBackdrop();
-  const menuBtn = getMenuButton();
-
-  if (sidebar) sidebar.classList.remove("open");
-  if (backdrop) backdrop.classList.remove("show");
-  if (menuBtn) menuBtn.setAttribute("aria-expanded", "false");
-  document.body.classList.remove("sidebar-open");
-}
-
-function persistSessions() {
+function maybeRedirectIfLoggedIn() {
+  if (!isAuthPage()) return;
   if (!isLoggedIn()) return;
-  saveSessions(chatState.sessions);
+  window.location.replace(getNextUrl(USER_CHAT_PAGE));
 }
 
-function currentSession() {
-  const id = chatState.currentChatId || loadCurrentChatId();
-  return chatState.sessions.find((s) => s.id === id) || chatState.sessions[0] || null;
-}
-
-function refreshAll() {
-  renderHistory(
-    getHistoryList(),
-    isLoggedIn() ? chatState.sessions : [],
-    chatState.currentChatId,
-    historyHandlers()
-  );
-  renderCurrentSession(getChatBox(), currentSession());
-  updateWelcomeState(getWelcomeScreen(), currentSession());
-}
-
-function setCurrentSessionId(id) {
-  chatState.currentChatId = String(id || "");
-  if (isLoggedIn()) {
-    saveCurrentChatId(chatState.currentChatId);
-  }
-}
-
-function ensureSession() {
-  let session = currentSession();
-  if (!session) {
-    session = createSession("New Chat");
-    chatState.sessions.unshift(session);
-    setCurrentSessionId(session.id);
-    persistSessions();
-  }
-  return session;
-}
-
-function historyHandlers() {
-  return {
-    onSwitch: (id) => {
-      selectSession(id);
-      closeSidebarPanel();
-    },
-    onPin: (id) => {
-      if (!isLoggedIn()) return;
-      const s = chatState.sessions.find((x) => x.id === id);
-      if (!s) return;
-      s.pinned = !s.pinned;
-      s.updatedAt = now();
-      persistSessions();
-      refreshAll();
-    },
-    onRename: (id) => {
-      if (!isLoggedIn()) return;
-      const title = prompt("Rename chat", "");
-      if (!title) return;
-      const s = chatState.sessions.find((x) => x.id === id);
-      if (!s) return;
-      s.title = title.trim() || s.title;
-      s.updatedAt = now();
-      persistSessions();
-      refreshAll();
-    },
-    onDelete: (id) => {
-      if (!isLoggedIn()) return;
-      chatState.sessions = chatState.sessions.filter((s) => s.id !== id);
-      if (chatState.currentChatId === id) {
-        chatState.currentChatId = chatState.sessions[0]?.id || "";
-        saveCurrentChatId(chatState.currentChatId);
-      }
-      persistSessions();
-      refreshAll();
-      closeSidebarPanel();
-    },
-  };
-}
-
-function selectSession(id) {
-  const s = chatState.sessions.find((x) => x.id === id);
-  if (!s) return;
-  setCurrentSessionId(s.id);
-  renderCurrentSession(getChatBox(), s);
-  renderHistory(
-    getHistoryList(),
-    isLoggedIn() ? chatState.sessions : [],
-    chatState.currentChatId,
-    historyHandlers()
-  );
-  updateWelcomeState(getWelcomeScreen(), s);
-  scrollToBottom(getChatBox());
-}
-
-function createNewChat(title = "New Chat") {
-  const s = createSession(title);
-  chatState.sessions.unshift(s);
-  setCurrentSessionId(s.id);
-  persistSessions();
-  refreshAll();
-  scrollToBottom(getChatBox());
-  return s;
-}
-
-function loadData() {
-  if (!isLoggedIn()) {
-    chatState.sessions = [createSession("New Chat")];
-    chatState.currentChatId = chatState.sessions[0]?.id || "";
-    return;
-  }
-
-  const saved = loadSessions();
-  if (!saved.length) {
-    if (migrateLegacyMessages()) removeLegacyMessagesKey();
-  }
-
-  chatState.sessions = loadSessions();
-  chatState.currentChatId = loadCurrentChatId() || chatState.sessions[0]?.id || "";
-
-  if (!chatState.currentChatId && chatState.sessions[0]) {
-    chatState.currentChatId = chatState.sessions[0].id;
-    saveCurrentChatId(chatState.currentChatId);
-  }
-
-  if (!chatState.sessions.length) createNewChat();
-}
-
-function bindSidebarShell() {
-  const menuBtn = getMenuButton();
-  const sidebar = getSidebar();
-  const backdrop = getBackdrop();
-
-  if (menuBtn && menuBtn.dataset.bound !== "true") {
-    menuBtn.dataset.bound = "true";
-    menuBtn.addEventListener("click", () => {
-      const isOpen = sidebar?.classList.contains("open");
-      if (isOpen) closeSidebarPanel();
-      else openSidebarPanel();
-    });
-  }
-
-  if (backdrop && backdrop.dataset.bound !== "true") {
-    backdrop.dataset.bound = "true";
-    backdrop.addEventListener("click", closeSidebarPanel);
-  }
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeSidebarPanel();
-  });
-}
-
-function bindNewChatButtons() {
-  document.querySelectorAll(NEW_CHAT_SELECTORS).forEach((btn) => {
-    if (btn.dataset.bound === "true") return;
-    btn.dataset.bound = "true";
-    btn.addEventListener("click", () => {
-      createNewChat();
-      closeSidebarPanel();
-    });
-  });
-}
-
-function readInputValue() {
-  const input = getChatInput();
-  return String(input?.value || "").trim();
-}
-
-function setInputValue(value = "") {
-  const input = getChatInput();
-  if (!input) return;
-  input.value = String(value || "");
-  autoResizeInput(input);
-}
-
-function showTyping() {
-  if (chatState.typingVisible) return;
-  appendTypingIndicator(getChatBox());
-  chatState.typingVisible = true;
-  scrollToBottom(getChatBox());
-}
-
-function hideTyping() {
-  removeTypingPlaceholders(getChatBox());
-  chatState.typingVisible = false;
-}
-
-function updateAssistant(text) {
-  if (!chatState.lastAssistantBubble) {
-    chatState.lastAssistantBubble = createAssistantBubble(getChatBox());
-  }
-  updateAssistantBubble(chatState.lastAssistantBubble, String(text || ""));
-  autoScrollIfNeeded(getChatBox());
-}
-
-function buildModelPrompt(userText) {
-  const parts = [
-    "You are PassSabi AI, a friendly personal AI teacher for students in Nigeria.",
-    "Teach clearly, step by step, and keep answers simple.",
-  ];
-
-  if (isLoggedIn()) {
-    const mem = buildMemoryPrompt();
-    if (mem) parts.push(mem);
-  }
-
-  if (userText) parts.push(`Student message: ${userText}`);
-  return parts.join("\n\n");
-}
-
-export function buildStudyModePrompt(message) {
-  const text = String(message || "").toLowerCase();
-  if (/do an exam|practice exam|mock exam|exam me|test me|set an exam/.test(text)) {
-    return {
-      visibleText: "Practice exam",
-      promptText:
-        "Create a full practice exam for the topic in this chat. Write exactly 30 objective questions numbered 1 to 30. Each question must have 4 options (A, B, C, D). After each question, show the correct answer clearly. After the objective section, add 5 theory questions. Keep the language simple.",
-    };
-  }
-  if (/quiz me|give me a quiz|quiz/.test(text)) {
-    return {
-      visibleText: "Quiz me",
-      promptText: "Create a short quiz on the topic in this chat with only 3 to 5 questions.",
-    };
-  }
-  return null;
-}
-
-export function buildLessonPrompt(action, answerText) {
-  const lastUser = [...(currentSession()?.messages || [])]
-    .reverse()
-    .find((m) => m.role === "user");
-  const topic = lastUser?.text || answerText || currentSession()?.title || "this topic";
-
-  if (action === "explain") {
-    return {
-      visibleText: "Explain again",
-      promptText: `Explain this topic in simpler words.\n\nTopic: ${topic}`,
-    };
-  }
-  if (action === "example") {
-    return {
-      visibleText: "Give example",
-      promptText: `Give one or two simple examples for this topic.\n\nTopic: ${topic}`,
-    };
-  }
-  if (action === "quiz") {
-    return {
-      visibleText: "Quiz me",
-      promptText: `Create a short quiz with 3 to 5 questions.\n\nTopic: ${topic}`,
-    };
-  }
-  return null;
-}
-
-async function startGeneration({
-  visibleText = "",
-  promptText = "",
-  appendUserMessage = true,
-  clearInput = false,
-  autoTitle = true,
-} = {}) {
-  const finalText = String(promptText || visibleText || readInputValue()).trim();
-  if (!finalText) return;
-
-  const session = ensureSession();
-
-  if (appendUserMessage) {
-    session.messages = session.messages || [];
-    session.messages.push({ role: "user", text: finalText, ts: now() });
-  }
-
-  if (autoTitle && session.title === "New Chat") {
-    session.title = makeSessionTitle(finalText);
-  }
-
-  session.updatedAt = now();
-  persistSessions();
-  refreshAll();
-
-  if (clearInput) setInputValue("");
-  chatState.lastAssistantBubble = null;
-  showTyping();
-
-  if (chatState.activeController) chatState.activeController.abort();
-  const controller = new AbortController();
-  chatState.activeController = controller;
-
+async function clearSession(redirectTo = null) {
   try {
-    let full = "";
-    await streamChatReply({
-      message: buildModelPrompt(finalText),
-      signal: controller.signal,
-      onChunk: (chunk) => {
-        if (typeof chunk === "object" && chunk !== null) {
-          full =
-            chunk.text ||
-            chunk.reply ||
-            chunk.message ||
-            chunk.content ||
-            chunk.choices?.[0]?.message?.content ||
-            "";
-        } else {
-          full = String(chunk || "");
-        }
-        hideTyping();
-        updateAssistant(full);
-      },
-    });
+    await supabase.auth.signOut({ scope: "local" });
+  } catch (error) {
+    console.warn("Sign out failed:", error);
+  }
 
-    const answer = cleanReply(full);
-    hideTyping();
-    updateAssistant(answer);
+  setAuthState(null, null);
+  writeStorage(AUTH_SESSION_KEYS, null);
+  writeStorage(AUTH_USER_KEYS, null);
 
-    session.messages.push({ role: "assistant", text: answer, ts: now() });
+  if (redirectTo) {
+    window.location.replace(redirectTo);
+  }
+}
 
-    if (isLoggedIn()) {
-      updateMemoryFromMessage(finalText);
+async function initLogin() {
+  const form = $("loginForm");
+  if (!form || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
+
+  const notice = $("loginNotice");
+  const btn = $("loginBtn");
+  const params = new URLSearchParams(window.location.search);
+
+  if (params.get("message")) {
+    showNotice(notice, params.get("message"), "success");
+  }
+
+  if (params.get("email") && $("loginEmail")) {
+    $("loginEmail").value = params.get("email");
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearNotice(notice);
+
+    const email = $("loginEmail")?.value?.trim();
+    const password = $("loginPassword")?.value || "";
+    const rememberMe = !!$("rememberMe")?.checked;
+
+    if (!email || !password) {
+      showNotice(notice, "Enter your email and password.", "error");
+      return;
     }
 
-    session.updatedAt = now();
-    persistSessions();
-    refreshAll();
-    scrollToBottom(getChatBox());
-  } catch (e) {
-    hideTyping();
-    console.error("PassSabi AI generation failed:", e);
+    if (!isEmail(email)) {
+      showNotice(notice, "Enter a valid email address.", "error");
+      return;
+    }
 
-    const msg =
-      e?.name === "AbortError"
-        ? "Request stopped."
-        : "PassSabi AI is temporarily unavailable. Please try again in a moment.";
+    setBusy(btn, true, "Logging in...");
 
-    updateAssistant(msg);
-    session.messages.push({ role: "assistant", text: msg, ts: now(), error: true });
-    session.updatedAt = now();
-    persistSessions();
-    refreshAll();
-  } finally {
-    chatState.activeController = null;
-    setSendButtonState(getSendButton(), false);
-  }
-}
-
-function handleSend(e) {
-  if (e) e.preventDefault();
-  const value = readInputValue();
-  if (!value) return;
-  startGeneration({
-    visibleText: value,
-    promptText: value,
-    appendUserMessage: true,
-    clearInput: true,
-    autoTitle: true,
-  });
-  closeSidebarPanel();
-}
-
-function bindChatInput() {
-  const input = getChatInput();
-  const form = getChatForm();
-  const sendBtn = getSendButton();
-
-  if (input && input.dataset.bound !== "true") {
-    input.dataset.bound = "true";
-    input.addEventListener("input", () => autoResizeInput(input));
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    });
-    autoResizeInput(input);
-  }
-
-  if (form && form.dataset.bound !== "true") {
-    form.dataset.bound = "true";
-    form.addEventListener("submit", handleSend);
-  }
-
-  if (sendBtn && sendBtn.dataset.bound !== "true") {
-    sendBtn.dataset.bound = "true";
-    sendBtn.addEventListener("click", handleSend);
-  }
-}
-
-function bindSearch() {
-  const search = getSearchInput();
-  if (!search || search.dataset.bound === "true") return;
-
-  search.dataset.bound = "true";
-  search.addEventListener("input", () => {
-    const q = String(search.value || "").trim().toLowerCase();
-    if (!q) return refreshAll();
-
-    const filtered = chatState.sessions.filter((s) =>
-      [s.title, ...(s.messages || []).map((m) => m.text)].join(" ").toLowerCase().includes(q)
-    );
-    renderHistory(getHistoryList(), filtered, chatState.currentChatId, historyHandlers());
-  });
-}
-
-function bindHistoryClicks() {
-  document.addEventListener("click", (e) => {
-    const el = e.target.closest("[data-chat-id],[data-action]");
-    if (!el) return;
-
-    const id = el.getAttribute("data-chat-id");
-    const action = el.getAttribute("data-action");
-
-    if (id && !action) return selectSession(id);
-    if (!id || !action) return;
-
-    if (action === "open-chat") selectSession(id);
-    if (action === "delete-chat") historyHandlers().onDelete(id);
-    if (action === "pin-chat") historyHandlers().onPin(id);
-    if (action === "rename-chat") historyHandlers().onRename(id);
-  });
-}
-
-function bindLessonButtons() {
-  document.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-lesson-action]");
-    if (!btn) return;
-    const action = btn.getAttribute("data-lesson-action");
-    const lesson = buildLessonPrompt(action, btn.getAttribute("data-context") || "");
-    if (!lesson) return;
-    await startGeneration({
-      visibleText: lesson.visibleText,
-      promptText: lesson.promptText,
-      appendUserMessage: true,
-      clearInput: false,
-      autoTitle: false,
-    });
-  });
-}
-
-async function initChatApp() {
-  await syncAuthState().catch(() => {});
-  loadData();
-  refreshAll();
-  wireBackButtons();
-  bindSidebarShell();
-  bindNewChatButtons();
-  bindChatInput();
-  bindSearch();
-  bindHistoryClicks();
-  bindLessonButtons();
-
-  setMessageActionHandlers({
-    onRetry: () => {
-      const lastUser = [...(currentSession()?.messages || [])]
-        .reverse()
-        .find((m) => m.role === "user");
-      if (!lastUser?.text) return;
-      startGeneration({
-        visibleText: lastUser.text,
-        promptText: lastUser.text,
-        appendUserMessage: false,
-        clearInput: false,
-        autoTitle: false,
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-    },
-    onLessonTool: (action, context = {}) => {
-      const lesson = buildLessonPrompt(action, context.answerText || "");
-      if (!lesson) return;
-      startGeneration({
-        visibleText: lesson.visibleText,
-        promptText: lesson.promptText,
-        appendUserMessage: true,
-        clearInput: false,
-        autoTitle: false,
-      });
-    },
-    onShare: async (action) => {
-      const session = currentSession();
-      const lastAssistant = [...(session?.messages || [])]
-        .reverse()
-        .find((m) => m.role === "assistant");
-      const text = lastAssistant?.text || "";
 
-      if (action === "pin") {
-        if (!session) return;
-        session.pinned = !session.pinned;
-        persistSessions();
-        refreshAll();
+      if (error) {
+        showNotice(notice, error.message, "error");
         return;
       }
 
-      if (!text) return;
+      setAuthState(data?.session || null, data?.session?.user || null);
 
-      const title = session?.title || "PassSabi AI";
+      try {
+        if (rememberMe) localStorage.setItem("passsabi_remember_me", "true");
+        else localStorage.removeItem("passsabi_remember_me");
+      } catch {
+        // ignore
+      }
 
-      if (action === "native-share" && navigator.share) {
-        try {
-          await navigator.share({ title, text });
-        } catch {}
+      await syncAuthState();
+      window.location.replace(getNextUrl(USER_CHAT_PAGE));
+    } catch (error) {
+      showNotice(notice, error?.message || "Login failed. Try again.", "error");
+    } finally {
+      setBusy(btn, false);
+    }
+  });
+}
+
+async function initSignup() {
+  const form = $("signupForm");
+  if (!form || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
+
+  const notice = $("signupNotice");
+  const btn = $("signupBtn");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearNotice(notice);
+
+    const fullName = $("fullName")?.value?.trim();
+    const email = $("signupEmail")?.value?.trim();
+    const password = $("signupPassword")?.value || "";
+    const confirm = $("confirmPassword")?.value || "";
+
+    if (!fullName || !email || !password || !confirm) {
+      showNotice(notice, "Fill in all fields.", "error");
+      return;
+    }
+
+    if (!$("terms")?.checked) {
+      showNotice(notice, "Please agree to the terms and privacy policy.", "error");
+      return;
+    }
+
+    if (!isEmail(email)) {
+      showNotice(notice, "Enter a valid email address.", "error");
+      return;
+    }
+
+    if (password.length < 8) {
+      showNotice(notice, "Password must be at least 8 characters.", "error");
+      return;
+    }
+
+    if (password !== confirm) {
+      showNotice(notice, "Passwords do not match.", "error");
+      return;
+    }
+
+    setBusy(btn, true, "Creating account...");
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            name: fullName,
+          },
+          emailRedirectTo: getRedirectUrl(
+            `${LOGIN_PAGE}?message=${encodeURIComponent("Check your email to verify your account.")}`
+          ),
+        },
+      });
+
+      if (error) {
+        showNotice(notice, error.message, "error");
         return;
       }
 
-      const blob = new Blob(
-        [action === "md" ? `# ${title}\n\n${text}` : text],
-        { type: "text/plain;charset=utf-8" }
+      if (data?.session) {
+        setAuthState(data.session, data.session.user || null);
+        await syncAuthState();
+        window.location.replace(getNextUrl(USER_CHAT_PAGE));
+        return;
+      }
+
+      showNotice(
+        notice,
+        "Account created. Check your email to verify your account.",
+        "success"
       );
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = action === "md" ? "passsabi-chat.md" : "passsabi-chat.txt";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    },
-  });
 
-  window.addEventListener("passsabi:auth-changed", async () => {
-    await syncAuthState().catch(() => {});
-    loadData();
-    refreshAll();
-  });
-
-  window.addEventListener("pageshow", () => {
-    syncAuthState().catch(() => {});
-    loadData();
-    refreshAll();
+      setTimeout(() => {
+        window.location.replace(
+          `${LOGIN_PAGE}?email=${encodeURIComponent(email)}&message=${encodeURIComponent(
+            "Check your email to verify your account."
+          )}`
+        );
+      }, 1100);
+    } catch (error) {
+      showNotice(notice, error?.message || "Signup failed. Try again.", "error");
+    } finally {
+      setBusy(btn, false);
+    }
   });
 }
 
-document.addEventListener("DOMContentLoaded", initChatApp);
+async function initForgotPassword() {
+  const form = $("forgotPasswordForm");
+  if (!form || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
 
-window.PassSabiChat = {
-  startGeneration,
-  createNewChat,
-  selectSession,
-  buildStudyModePrompt,
-  buildLessonPrompt,
+  const notice = $("forgotNotice");
+  const btn = $("forgotBtn");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearNotice(notice);
+
+    const email = $("forgotEmail")?.value?.trim();
+
+    if (!email) {
+      showNotice(notice, "Enter your email address.", "error");
+      return;
+    }
+
+    if (!isEmail(email)) {
+      showNotice(notice, "Enter a valid email address.", "error");
+      return;
+    }
+
+    setBusy(btn, true, "Sending reset link...");
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: getRedirectUrl(`${RESET_PAGE}?email=${encodeURIComponent(email)}`),
+      });
+
+      if (error) {
+        showNotice(notice, error.message, "error");
+        return;
+      }
+
+      showNotice(notice, "Password reset link sent. Check your email.", "success");
+    } catch (error) {
+      showNotice(notice, error?.message || "Reset failed. Try again.", "error");
+    } finally {
+      setBusy(btn, false);
+    }
+  });
+}
+
+async function initResetPassword() {
+  const form = $("resetPasswordForm");
+  if (!form || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
+
+  const notice = $("resetNotice");
+  const btn = $("resetBtn");
+
+  await syncAuthState();
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearNotice(notice);
+
+    const password = $("newPassword")?.value || "";
+    const confirm = $("confirmNewPassword")?.value || "";
+
+    if (password.length < 8) {
+      showNotice(notice, "Password must be at least 8 characters.", "error");
+      return;
+    }
+
+    if (password !== confirm) {
+      showNotice(notice, "Passwords do not match.", "error");
+      return;
+    }
+
+    setBusy(btn, true, "Updating password...");
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+
+      if (error) {
+        showNotice(notice, error.message, "error");
+        return;
+      }
+
+      showNotice(notice, "Password updated. Redirecting to login...", "success");
+      setTimeout(() => {
+        window.location.replace(LOGIN_PAGE);
+      }, 900);
+    } catch (error) {
+      showNotice(notice, error?.message || "Password update failed. Try again.", "error");
+    } finally {
+      setBusy(btn, false);
+    }
+  });
+}
+
+async function bootstrap() {
+  if (state.booted) return;
+  state.booted = true;
+
+  bindPasswordToggles();
+  bindBackButtons();
+
+  await ensureAuthReady();
+  maybeRedirectIfLoggedIn();
+
+  const name = pageName();
+
+  if (name === LOGIN_PAGE) await initLogin();
+  if (name === SIGNUP_PAGE) await initSignup();
+  if (name === FORGOT_PAGE) await initForgotPassword();
+  if (name === RESET_PAGE) await initResetPassword();
+
+  maybeRedirectIfLoggedIn();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  bootstrap().catch((error) => {
+    console.warn("Auth bootstrap failed:", error);
+  });
+});
+
+window.addEventListener("pageshow", () => {
+  syncAuthState().catch((error) => {
+    console.warn("Auth pageshow sync failed:", error);
+  });
+});
+
+window.PassSabiAuth = {
+  currentUser,
+  getAuthSession,
+  isLoggedIn,
+  syncAuthState,
+  clearSession,
+  waitForAuthUser,
+  ensureAuthReady,
+};
+
+export {
+  currentUser,
+  getAuthSession,
+  isLoggedIn,
+  syncAuthState,
+  clearSession,
+  waitForAuthUser,
+  ensureAuthReady,
 };
