@@ -1,31 +1,23 @@
-// js/auth.js
+import { supabase } from "./supabase.js";
+
 const LOGIN_PAGE = "login.html";
 const SIGNUP_PAGE = "signup.html";
 const FORGOT_PAGE = "forgot-password.html";
 const RESET_PAGE = "reset-password.html";
 const USER_CHAT_PAGE = "user-chat.html";
+const PROFILE_PAGE = "profile.html";
 
-const SUPABASE_URL =
-  window.__PASSSABI_SUPABASE_URL__ ??
-  "https://ryfjziuynqhyfrsqiqmq.supabase.co";
+const AUTH_SESSION_KEYS = ["passsabi_auth_session_v2", "passsabi_session_v1"];
+const AUTH_USER_KEYS = ["passsabi_auth_user_v2", "passsabi_user_v1"];
 
-const SUPABASE_ANON_KEY =
-  window.__PASSSABI_SUPABASE_ANON_KEY__ ??
-  "sb_publishable_Ca_4_AhaSQJX69-M_AsIuQ_rHRcUxVU";
-
-const REMEMBER_ME_KEY = "passsabi_remember_me";
-const AUTH_SESSION_KEY = "passsabi_session_v1";
-const AUTH_USER_KEY = "passsabi_user_v1";
-
-const $ = (selector) => document.getElementById(selector);
+const $ = (id) => document.getElementById(id);
 
 const state = {
   booted: false,
-  clientPromise: null,
-  client: null,
   session: null,
   user: null,
-  listenerAttached: false,
+  listenerBound: false,
+  initPromise: null,
 };
 
 function pageName() {
@@ -38,6 +30,245 @@ function isAuthPage() {
 
 function isEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim().toLowerCase());
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readFirstStorage(keys) {
+  for (const key of keys) {
+    try {
+      const value = localStorage.getItem(key);
+      if (value) return value;
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+function writeStorage(keys, value) {
+  for (const key of keys) {
+    try {
+      if (value == null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function parseJson(value) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeUser(user) {
+  if (!user || typeof user !== "object") return null;
+
+  return {
+    id: String(user.id || "").trim(),
+    email: String(user.email || "").trim(),
+    phone: String(user.phone || "").trim(),
+    created_at: user.created_at || "",
+    updated_at: user.updated_at || "",
+    last_sign_in_at: user.last_sign_in_at || "",
+    email_confirmed_at: user.email_confirmed_at || "",
+    confirmed_at: user.confirmed_at || "",
+    user_metadata: user.user_metadata || {},
+    app_metadata: user.app_metadata || {},
+    identities: Array.isArray(user.identities) ? user.identities : [],
+    fullName:
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.user_metadata?.fullName ||
+      "",
+  };
+}
+
+function readCachedAuthState() {
+  const rawSession = readFirstStorage(AUTH_SESSION_KEYS);
+  const rawUser = readFirstStorage(AUTH_USER_KEYS);
+
+  const session = parseJson(rawSession);
+  const cachedUser = parseJson(rawUser);
+
+  if (!session && !cachedUser) return null;
+
+  const user = normalizeUser(session?.user || cachedUser);
+  if (!user) return null;
+
+  return {
+    session: session
+      ? {
+          ...session,
+          user: session.user || user,
+        }
+      : { user },
+    user,
+  };
+}
+
+function emitAuthChanged(session, user) {
+  window.dispatchEvent(
+    new CustomEvent("passsabi:auth-changed", {
+      detail: { session: session || null, user: user || null },
+    })
+  );
+}
+
+function setAuthState(session, user = null) {
+  if (!session) {
+    state.session = null;
+    state.user = null;
+    window.__passsabiAuthSession = null;
+    window.__passsabiAuthUser = null;
+    writeStorage(AUTH_SESSION_KEYS, null);
+    writeStorage(AUTH_USER_KEYS, null);
+    emitAuthChanged(null, null);
+    return null;
+  }
+
+  const nextUser = normalizeUser(user || session.user);
+  state.session = {
+    ...session,
+    user: session.user || nextUser,
+  };
+  state.user = nextUser;
+  window.__passsabiAuthSession = state.session;
+  window.__passsabiAuthUser = state.user;
+
+  writeStorage(AUTH_SESSION_KEYS, JSON.stringify(state.session));
+  writeStorage(AUTH_USER_KEYS, JSON.stringify(state.user));
+  emitAuthChanged(state.session, state.user);
+  return state.user;
+}
+
+function currentUser() {
+  return state.user || window.__passsabiAuthUser || readCachedAuthState()?.user || null;
+}
+
+function getAuthSession() {
+  return state.session || window.__passsabiAuthSession || readCachedAuthState()?.session || null;
+}
+
+function isLoggedIn() {
+  return !!currentUser();
+}
+
+async function ensureCodeSessionExchange() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("code")) return null;
+
+  const { data, error } = await supabase.auth.exchangeCodeForSession(url.toString());
+  if (error) throw error;
+
+  try {
+    url.searchParams.delete("code");
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // ignore
+  }
+
+  if (data?.session) {
+    setAuthState(data.session, data.session.user);
+  }
+
+  return data?.session || null;
+}
+
+function bindListenerOnce() {
+  if (state.listenerBound) return;
+  state.listenerBound = true;
+
+  try {
+    supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (nextSession?.user) setAuthState(nextSession, nextSession.user);
+      else setAuthState(null, null);
+    });
+  } catch (error) {
+    console.warn("Auth listener failed:", error);
+  }
+}
+
+async function syncAuthState() {
+  bindListenerOnce();
+
+  const cached = readCachedAuthState();
+  if (cached && !state.session && !state.user) {
+    setAuthState(cached.session, cached.user);
+  }
+
+  try {
+    await ensureCodeSessionExchange();
+  } catch (error) {
+    console.warn("Auth code exchange failed:", error);
+  }
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error || !data?.session) {
+      if (cached) {
+        setAuthState(cached.session, cached.user);
+        return state.user;
+      }
+
+      setAuthState(null, null);
+      return null;
+    }
+
+    let session = data.session;
+    let user = session.user || null;
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) user = userData.user;
+    } catch {
+      // if user fetch fails, keep session.user
+    }
+
+    setAuthState(session, user);
+    return state.user;
+  } catch (error) {
+    console.warn("syncAuthState failed:", error);
+
+    if (cached) {
+      setAuthState(cached.session, cached.user);
+      return state.user;
+    }
+
+    setAuthState(null, null);
+    return null;
+  }
+}
+
+async function ensureAuthReady() {
+  if (!state.initPromise) {
+    state.initPromise = syncAuthState().catch((error) => {
+      console.warn("Initial auth boot failed:", error);
+      return null;
+    });
+  }
+  return state.initPromise;
+}
+
+async function waitForAuthUser(timeoutMs = 1400, intervalMs = 80) {
+  await ensureAuthReady();
+  const end = Date.now() + timeoutMs;
+
+  while (Date.now() < end) {
+    const user = currentUser();
+    if (user) return user;
+    await sleep(intervalMs);
+  }
+
+  return currentUser();
 }
 
 function getNextUrl(defaultUrl = USER_CHAT_PAGE) {
@@ -69,314 +300,6 @@ function setBusy(btn, busy, busyText) {
   if (!btn.dataset.defaultText) btn.dataset.defaultText = btn.textContent;
   btn.disabled = busy;
   btn.textContent = busy ? busyText : btn.dataset.defaultText;
-}
-
-function toUser(user) {
-  if (!user || typeof user !== "object") return null;
-
-  return {
-    id: user.id || "",
-    email: user.email || "",
-    phone: user.phone || "",
-    created_at: user.created_at || "",
-    updated_at: user.updated_at || "",
-    last_sign_in_at: user.last_sign_in_at || "",
-    email_confirmed_at: user.email_confirmed_at || "",
-    confirmed_at: user.confirmed_at || "",
-    user_metadata: user.user_metadata || {},
-    app_metadata: user.app_metadata || {},
-    identities: Array.isArray(user.identities) ? user.identities : [],
-    fullName:
-      user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      user.user_metadata?.fullName ||
-      "",
-  };
-}
-
-function safeStorageGet(key) {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeStorageSet(key, value) {
-  try {
-    window.localStorage.setItem(key, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function safeStorageRemove(key) {
-  try {
-    window.localStorage.removeItem(key);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function readCachedAuthState() {
-  const rawSession = safeStorageGet(AUTH_SESSION_KEY);
-  const rawUser = safeStorageGet(AUTH_USER_KEY);
-
-  if (!rawSession && !rawUser) return null;
-
-  let session = null;
-  let user = null;
-
-  if (rawSession) {
-    try {
-      session = JSON.parse(rawSession);
-    } catch {
-      session = null;
-    }
-  }
-
-  if (rawUser) {
-    try {
-      user = JSON.parse(rawUser);
-    } catch {
-      user = null;
-    }
-  }
-
-  const safeSession = session && typeof session === "object" ? session : null;
-  const safeUser = user && typeof user === "object" ? user : null;
-
-  if (!safeSession && !safeUser) return null;
-
-  if (safeSession && !safeSession.user && safeUser) {
-    safeSession.user = safeUser;
-  }
-
-  const finalUser = toUser(safeSession?.user || safeUser);
-  if (!finalUser) return null;
-
-  return {
-    session: safeSession
-      ? { ...safeSession, user: safeSession.user || finalUser }
-      : { user: finalUser },
-    user: finalUser,
-  };
-}
-
-function writeCachedAuthState(session, user) {
-  if (!session || !user) {
-    safeStorageRemove(AUTH_SESSION_KEY);
-    safeStorageRemove(AUTH_USER_KEY);
-    return;
-  }
-
-  safeStorageSet(AUTH_SESSION_KEY, JSON.stringify(session));
-  safeStorageSet(AUTH_USER_KEY, JSON.stringify(user));
-}
-
-function emitAuthChanged(session, user) {
-  window.dispatchEvent(
-    new CustomEvent("passsabi:auth-changed", {
-      detail: { session: session || null, user: user || null },
-    })
-  );
-}
-
-function setAuthState(session) {
-  state.session = session && typeof session === "object" ? session : null;
-  state.user = state.session?.user ? toUser(state.session.user) : null;
-
-  window.__passsabiAuthSession = state.session;
-  window.__passsabiAuthUser = state.user;
-
-  writeCachedAuthState(state.session, state.user);
-  emitAuthChanged(state.session, state.user);
-  return { session: state.session, user: state.user };
-}
-
-async function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`);
-    if (existing) {
-      if (existing.dataset.loaded === "true") {
-        resolve();
-        return;
-      }
-
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), {
-        once: true,
-      });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.onload = () => {
-      script.dataset.loaded = "true";
-      resolve();
-    };
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(script);
-  });
-}
-
-async function loadSupabaseSdk() {
-  if (window.supabase && typeof window.supabase.createClient === "function") {
-    return window.supabase;
-  }
-
-  await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
-  if (window.supabase && typeof window.supabase.createClient === "function") {
-    return window.supabase;
-  }
-
-  throw new Error("Supabase SDK did not load.");
-}
-
-async function getSupabase() {
-  if (state.client) return state.client;
-  if (state.clientPromise) return state.clientPromise;
-
-  state.clientPromise = (async () => {
-    try {
-      const mod = await import("./supabase.js");
-      if (mod?.supabase?.auth?.getSession) {
-        state.client = mod.supabase;
-        window.__PASSSABI_SUPABASE_CLIENT__ = state.client;
-        return state.client;
-      }
-    } catch (error) {
-      console.warn("Fallbacking to direct Supabase SDK:", error);
-    }
-
-    const sdk = await loadSupabaseSdk();
-    const client = sdk.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storage: window.localStorage,
-      },
-      global: {
-        headers: {
-          "X-Client-Info": "PassSabi-AI-Web",
-        },
-      },
-    });
-
-    state.client = client;
-    window.__PASSSABI_SUPABASE_CLIENT__ = client;
-    return client;
-  })();
-
-  return state.clientPromise;
-}
-
-function attachAuthListener(supabase) {
-  if (state.listenerAttached) return;
-  state.listenerAttached = true;
-
-  try {
-    supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setAuthState(nextSession || null);
-    });
-  } catch (error) {
-    console.warn("Auth listener failed:", error);
-  }
-}
-
-async function syncAuthState() {
-  const supabase = await getSupabase();
-  attachAuthListener(supabase);
-
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      const cached = readCachedAuthState();
-      if (cached) {
-        setAuthState(cached.session);
-        return state.user;
-      }
-
-      setAuthState(null);
-      return null;
-    }
-
-    let session = data?.session || null;
-
-    if (!session) {
-      const cached = readCachedAuthState();
-      if (cached) {
-        setAuthState(cached.session);
-        return state.user;
-      }
-
-      setAuthState(null);
-      return null;
-    }
-
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user) {
-        session = { ...session, user: userData.user };
-      }
-    } catch {
-      // Keep the session if getUser fails temporarily.
-    }
-
-    setAuthState(session);
-    return state.user;
-  } catch (error) {
-    console.warn("syncAuthState failed:", error);
-
-    const cached = readCachedAuthState();
-    if (cached) {
-      setAuthState(cached.session);
-      return state.user;
-    }
-
-    setAuthState(null);
-    return null;
-  }
-}
-
-function currentUser() {
-  return state.user || window.__passsabiAuthUser || null;
-}
-
-function getAuthSession() {
-  return state.session || window.__passsabiAuthSession || null;
-}
-
-function isLoggedIn() {
-  return !!currentUser();
-}
-
-async function clearSession(redirectTo = null) {
-  try {
-    const supabase = await getSupabase();
-    await supabase.auth.signOut({ scope: "local" });
-  } catch (error) {
-    console.warn("Sign out failed:", error);
-  }
-
-  try {
-    safeStorageRemove(AUTH_SESSION_KEY);
-    safeStorageRemove(AUTH_USER_KEY);
-    safeStorageRemove("passsabi_session_v1");
-    safeStorageRemove("passsabi_user_v1");
-    safeStorageRemove(REMEMBER_ME_KEY);
-  } catch {}
-
-  setAuthState(null);
-
-  if (redirectTo) {
-    window.location.replace(redirectTo);
-  }
 }
 
 function bindPasswordToggles() {
@@ -414,7 +337,28 @@ function maybeRedirectIfLoggedIn() {
   window.location.replace(getNextUrl(USER_CHAT_PAGE));
 }
 
-function initLogin() {
+async function clearSession(redirectTo = null) {
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch (error) {
+    console.warn("Sign out failed:", error);
+  }
+
+  setAuthState(null, null);
+
+  try {
+    writeStorage(AUTH_SESSION_KEYS, null);
+    writeStorage(AUTH_USER_KEYS, null);
+  } catch {
+    // ignore
+  }
+
+  if (redirectTo) {
+    window.location.replace(redirectTo);
+  }
+}
+
+async function initLogin() {
   const form = $("loginForm");
   if (!form || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
@@ -453,7 +397,6 @@ function initLogin() {
     setBusy(btn, true, "Logging in...");
 
     try {
-      const supabase = await getSupabase();
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -464,14 +407,16 @@ function initLogin() {
         return;
       }
 
-      setAuthState(data?.session || null);
+      setAuthState(data?.session || null, data?.session?.user || null);
 
       try {
-        if (rememberMe) localStorage.setItem(REMEMBER_ME_KEY, "true");
-        else localStorage.removeItem(REMEMBER_ME_KEY);
-      } catch {}
+        if (rememberMe) localStorage.setItem("passsabi_remember_me", "true");
+        else localStorage.removeItem("passsabi_remember_me");
+      } catch {
+        // ignore
+      }
 
-      await syncAuthState().catch(() => {});
+      await syncAuthState();
       window.location.replace(getNextUrl(USER_CHAT_PAGE));
     } catch (error) {
       showNotice(notice, error?.message || "Login failed. Try again.", "error");
@@ -481,7 +426,7 @@ function initLogin() {
   });
 }
 
-function initSignup() {
+async function initSignup() {
   const form = $("signupForm");
   if (!form || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
@@ -527,17 +472,15 @@ function initSignup() {
     setBusy(btn, true, "Creating account...");
 
     try {
-      const supabase = await getSupabase();
-      const redirectTo = getRedirectUrl(
-        `${LOGIN_PAGE}?message=${encodeURIComponent("Check your email to verify your account.")}`
-      );
-
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: redirectTo,
-          data: { full_name: fullName },
+          data: {
+            full_name: fullName,
+            name: fullName,
+          },
+          emailRedirectTo: getRedirectUrl(`${LOGIN_PAGE}?message=${encodeURIComponent("Check your email to verify your account.")}`),
         },
       });
 
@@ -546,15 +489,22 @@ function initSignup() {
         return;
       }
 
-      setAuthState(data?.session || null);
-
       if (data?.session) {
-        await syncAuthState().catch(() => {});
+        setAuthState(data.session, data.session.user || null);
+        await syncAuthState();
         window.location.replace(getNextUrl(USER_CHAT_PAGE));
         return;
       }
 
-      showNotice(notice, "Account created. Check your email to verify your account.", "success");
+      showNotice(
+        notice,
+        "Account created. Check your email to verify your account.",
+        "success"
+      );
+
+      setTimeout(() => {
+        window.location.replace(`${LOGIN_PAGE}?email=${encodeURIComponent(email)}&message=${encodeURIComponent("Check your email to verify your account.")}`);
+      }, 1100);
     } catch (error) {
       showNotice(notice, error?.message || "Signup failed. Try again.", "error");
     } finally {
@@ -563,7 +513,7 @@ function initSignup() {
   });
 }
 
-function initForgotPassword() {
+async function initForgotPassword() {
   const form = $("forgotPasswordForm");
   if (!form || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
@@ -591,7 +541,6 @@ function initForgotPassword() {
     setBusy(btn, true, "Sending reset link...");
 
     try {
-      const supabase = await getSupabase();
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: getRedirectUrl(`${RESET_PAGE}?email=${encodeURIComponent(email)}`),
       });
@@ -610,13 +559,15 @@ function initForgotPassword() {
   });
 }
 
-function initResetPassword() {
+async function initResetPassword() {
   const form = $("resetPasswordForm");
   if (!form || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
 
   const notice = $("resetNotice");
   const btn = $("resetBtn");
+
+  await syncAuthState();
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -639,7 +590,6 @@ function initResetPassword() {
     setBusy(btn, true, "Updating password...");
 
     try {
-      const supabase = await getSupabase();
       const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
@@ -648,7 +598,9 @@ function initResetPassword() {
       }
 
       showNotice(notice, "Password updated. Redirecting to login...", "success");
-      setTimeout(() => window.location.replace(LOGIN_PAGE), 900);
+      setTimeout(() => {
+        window.location.replace(LOGIN_PAGE);
+      }, 900);
     } catch (error) {
       showNotice(notice, error?.message || "Password update failed. Try again.", "error");
     } finally {
@@ -658,37 +610,30 @@ function initResetPassword() {
 }
 
 async function bootstrap() {
-  bindPasswordToggles();
-  bindBackButtons();
-
-  const name = pageName();
-  if (name === LOGIN_PAGE) initLogin();
-  if (name === SIGNUP_PAGE) initSignup();
-  if (name === FORGOT_PAGE) initForgotPassword();
-  if (name === RESET_PAGE) initResetPassword();
-
-  try {
-    await syncAuthState();
-    maybeRedirectIfLoggedIn();
-  } catch (error) {
-    console.warn("Auth bootstrap failed:", error);
-  }
-}
-
-function start() {
   if (state.booted) return;
   state.booted = true;
 
-  bootstrap().catch((error) => {
-    console.warn("Auth startup crashed:", error);
-  });
+  bindPasswordToggles();
+  bindBackButtons();
+
+  await ensureAuthReady();
+  maybeRedirectIfLoggedIn();
+
+  const name = pageName();
+
+  if (name === LOGIN_PAGE) await initLogin();
+  if (name === SIGNUP_PAGE) await initSignup();
+  if (name === FORGOT_PAGE) await initForgotPassword();
+  if (name === RESET_PAGE) await initResetPassword();
+
+  maybeRedirectIfLoggedIn();
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", start, { once: true });
-} else {
-  start();
-}
+document.addEventListener("DOMContentLoaded", () => {
+  bootstrap().catch((error) => {
+    console.warn("Auth bootstrap failed:", error);
+  });
+});
 
 window.addEventListener("pageshow", () => {
   syncAuthState().catch((error) => {
@@ -696,11 +641,22 @@ window.addEventListener("pageshow", () => {
   });
 });
 
+window.PassSabiAuth = {
+  currentUser,
+  getAuthSession,
+  isLoggedIn,
+  syncAuthState,
+  clearSession,
+  waitForAuthUser,
+  ensureAuthReady,
+};
+
 export {
   currentUser,
   getAuthSession,
   isLoggedIn,
   syncAuthState,
   clearSession,
-  getSupabase,
+  waitForAuthUser,
+  ensureAuthReady,
 };
