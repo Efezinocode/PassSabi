@@ -9,7 +9,6 @@
 
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/auth.css" />
-  <script type="module" src="js/auth.js"></script>
 </head>
 <body class="auth-page">
   <main class="auth-shell">
@@ -31,6 +30,21 @@
       <div class="auth-body">
         <div class="profile-panel">
           <div class="profile-item">
+            <span>Signed in as</span>
+            <strong id="settingsUserName">—</strong>
+          </div>
+          <div class="profile-item">
+            <span>Email</span>
+            <strong id="settingsUserEmail">—</strong>
+          </div>
+          <div class="profile-item">
+            <span>Status</span>
+            <strong id="settingsUserStatus">—</strong>
+          </div>
+        </div>
+
+        <div class="profile-panel" style="margin-top:18px;">
+          <div class="profile-item">
             <span>Theme</span>
             <strong>Dark</strong>
           </div>
@@ -46,6 +60,7 @@
 
         <div class="profile-actions" style="margin-top:18px;">
           <a class="secondary-btn" href="user-chat.html">Back to chat</a>
+          <button data-shell-logout class="auth-btn" type="button">Logout</button>
         </div>
       </div>
 
@@ -54,5 +69,7 @@
       </div>
     </section>
   </main>
+
+  <script type="module" src="js/user-shell.js"></script>
 </body>
 </html>
