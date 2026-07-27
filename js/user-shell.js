@@ -1,7 +1,19 @@
-import { currentUser, clearSession, syncAuthState, waitForAuthUser } from "./auth.js";
+import { clearSession, syncAuthState, waitForAuthUser } from "./auth.js";
 
-function getLoginUrl() {
-  return `login.html?next=${encodeURIComponent("user-chat.html")}`;
+const LOGIN_PAGE = "login.html";
+const GUEST_CHAT_PAGE = "guest-chat.html";
+const PROTECTED_PAGES = new Set(["user-chat.html", "profile.html", "settings.html"]);
+
+function pageName() {
+  return (window.location.pathname.split("/").pop() || "").toLowerCase();
+}
+
+function isProtectedPage() {
+  return PROTECTED_PAGES.has(pageName());
+}
+
+function getLoginUrl(next = pageName()) {
+  return `${LOGIN_PAGE}?next=${encodeURIComponent(next || "user-chat.html")}`;
 }
 
 function goBackSafely() {
@@ -25,13 +37,13 @@ function wireBackButtons() {
 }
 
 function wireLogoutButtons() {
-  document.querySelectorAll("[data-shell-logout]").forEach((link) => {
+  document.querySelectorAll("[data-shell-logout], #logoutBtn").forEach((link) => {
     if (link.dataset.bound === "true") return;
     link.dataset.bound = "true";
 
     link.addEventListener("click", async (e) => {
       e.preventDefault();
-      await clearSession("guest-chat.html");
+      await clearSession(GUEST_CHAT_PAGE);
     });
   });
 }
@@ -57,7 +69,7 @@ function wireTopbarAuth(user) {
 
   if (!user) {
     const loginLink = document.createElement("a");
-    loginLink.href = getLoginUrl();
+    loginLink.href = getLoginUrl("user-chat.html");
     loginLink.className = "topbar-auth-link";
     loginLink.textContent = "Login";
 
@@ -80,7 +92,7 @@ function wireTopbarAuth(user) {
   logoutBtn.className = "topbar-auth-link";
   logoutBtn.textContent = "Logout";
   logoutBtn.addEventListener("click", async () => {
-    await clearSession("guest-chat.html");
+    await clearSession(GUEST_CHAT_PAGE);
   });
 
   topbar.appendChild(name);
@@ -136,23 +148,86 @@ function wireSidebarControls() {
   }
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function wireProfileView(user) {
+  const profileName = document.getElementById("profileName");
+  const profileEmail = document.getElementById("profileEmail");
+  const profileStatus = document.getElementById("profileStatus");
+  const profileJoined = document.getElementById("profileJoined");
+  const currentUserName = document.getElementById("currentUserName");
+  const currentUserEmail = document.getElementById("currentUserEmail");
+  const currentUserBadge = document.getElementById("currentUserBadge");
+
+  if (currentUserName) currentUserName.textContent = user.fullName || user.email || "PassSabi User";
+  if (currentUserEmail) currentUserEmail.textContent = user.email || "Signed in";
+  if (currentUserBadge) {
+    const initial = (user.fullName || user.email || "P").trim().charAt(0).toUpperCase();
+    currentUserBadge.textContent = initial || "P";
+  }
+
+  if (profileName) profileName.textContent = user.fullName || "—";
+  if (profileEmail) profileEmail.textContent = user.email || "—";
+  if (profileStatus) {
+    const verified = Boolean(user.email_confirmed_at || user.confirmed_at);
+    profileStatus.textContent = verified ? "Verified" : "Pending verification";
+  }
+  if (profileJoined) profileJoined.textContent = formatDate(user.created_at);
+}
+
+function wireSettingsView(user) {
+  const settingsUserName = document.getElementById("settingsUserName");
+  const settingsUserEmail = document.getElementById("settingsUserEmail");
+  const settingsUserStatus = document.getElementById("settingsUserStatus");
+
+  if (settingsUserName) settingsUserName.textContent = user.fullName || "—";
+  if (settingsUserEmail) settingsUserEmail.textContent = user.email || "—";
+  if (settingsUserStatus) {
+    const verified = Boolean(user.email_confirmed_at || user.confirmed_at);
+    settingsUserStatus.textContent = verified ? "Verified" : "Pending verification";
+  }
+}
+
 async function renderShellState() {
   wireBackButtons();
   wireSidebarControls();
 
   await syncAuthState();
-  const user = await waitForAuthUser(900);
+  const user = (await waitForAuthUser(900)) || null;
 
-  if (!user) {
+  if (!user && isProtectedPage()) {
     wireUserLinks(null);
     wireTopbarAuth(null);
-    window.location.replace(getLoginUrl());
+    window.location.replace(getLoginUrl(pageName()));
     return null;
   }
 
-  wireUserLinks(user);
-  wireLogoutButtons();
-  wireTopbarAuth(user);
+  if (user) {
+    wireUserLinks(user);
+    wireLogoutButtons();
+    wireTopbarAuth(user);
+  } else {
+    wireUserLinks(null);
+    wireTopbarAuth(null);
+  }
+
+  if (pageName() === "profile.html") {
+    if (user) wireProfileView(user);
+  }
+
+  if (pageName() === "settings.html") {
+    if (user) wireSettingsView(user);
+  }
+
   return user;
 }
 
