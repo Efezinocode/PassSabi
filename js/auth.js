@@ -7,8 +7,6 @@ const FORGOT_PAGE = "forgot-password.html";
 const RESET_PAGE = "reset-password.html";
 const USER_CHAT_PAGE = "user-chat.html";
 
-const AUTH_SESSION_KEY = "passsabi_session_v1";
-const AUTH_USER_KEY = "passsabi_user_v1";
 const REMEMBER_ME_KEY = "passsabi_remember_me";
 
 const $ = (id) => document.getElementById(id);
@@ -25,22 +23,6 @@ function pageName() {
 
 function isAuthPage() {
   return [LOGIN_PAGE, SIGNUP_PAGE, FORGOT_PAGE, RESET_PAGE].includes(pageName());
-}
-
-function readJson(key, fallback = null) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) ?? fallback : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(key, value) {
-  try {
-    if (value == null) localStorage.removeItem(key);
-    else localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
 }
 
 function toCachedUser(user) {
@@ -77,9 +59,6 @@ function emitAuthChanged(session, user) {
 function persistAuthState(session) {
   authSession = session && typeof session === "object" ? session : null;
   authUser = authSession?.user ? toCachedUser(authSession.user) : null;
-
-  writeJson(AUTH_SESSION_KEY, authSession);
-  writeJson(AUTH_USER_KEY, authUser);
 
   window.__passsabiAuthSession = authSession;
   window.__passsabiAuthUser = authUser;
@@ -128,11 +107,11 @@ async function ensureAuthReady() {
 }
 
 function currentUser() {
-  return authUser || readJson(AUTH_USER_KEY, null) || null;
+  return authUser || window.__passsabiAuthUser || null;
 }
 
 function getAuthSession() {
-  return authSession || readJson(AUTH_SESSION_KEY, null) || null;
+  return authSession || window.__passsabiAuthSession || null;
 }
 
 function isLoggedIn() {
@@ -152,8 +131,8 @@ async function clearSession(redirectTo = null) {
   }
 
   try {
-    localStorage.removeItem(AUTH_SESSION_KEY);
-    localStorage.removeItem(AUTH_USER_KEY);
+    localStorage.removeItem("passsabi_session_v1");
+    localStorage.removeItem("passsabi_user_v1");
     localStorage.removeItem(REMEMBER_ME_KEY);
   } catch {}
 
