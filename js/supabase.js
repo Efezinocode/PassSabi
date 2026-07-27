@@ -2,11 +2,11 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const SUPABASE_URL =
-  window.__PASSSABI_SUPABASE_URL__ ||
+  window.__PASSSABI_SUPABASE_URL__ ??
   "https://ryfjziuynqhyfrsqiqmq.supabase.co";
 
 const SUPABASE_ANON_KEY =
-  window.__PASSSABI_SUPABASE_ANON_KEY__ ||
+  window.__PASSSABI_SUPABASE_ANON_KEY__ ??
   "sb_publishable_Ca_4_AhaSQJX69-M_AsIuQ_rHRcUxVU";
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
