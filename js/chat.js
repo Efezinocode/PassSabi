@@ -11,7 +11,7 @@ import {
   buildMemoryPrompt,
 } from "./storage.js";
 
-import { currentUser } from "./auth.js";
+import { currentUser, syncAuthState } from "./auth.js";
 import { streamChatReply } from "./api.js";
 import {
   autoResizeInput,
@@ -650,13 +650,18 @@ function initChatApp() {
     },
   });
 
-  window.addEventListener("passsabi:auth-changed", () => {
+    window.addEventListener("passsabi:auth-changed", async () => {
+    await syncAuthState().catch(() => {});
     loadData();
     refreshAll();
   });
 
-  window.addEventListener("pageshow", refreshAll);
-  refreshAll();
+  window.addEventListener("pageshow", async () => {
+    await syncAuthState().catch(() => {});
+    loadData();
+    refreshAll();
+  });
+  
 
   const input = getChatInput();
   if (input) autoResizeInput(input);
