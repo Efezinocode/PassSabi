@@ -1,9 +1,4 @@
-import { currentUser, syncAuthState, clearSession, getSupabase, getAuthSession } from "./auth.js";
-
-const AUTH_RETRY_COUNT = 6;
-const AUTH_RETRY_DELAY_MS = 180;
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+import { currentUser, clearSession, syncAuthState, waitForAuthUser } from "./auth.js";
 
 function getLoginUrl() {
   return `login.html?next=${encodeURIComponent("user-chat.html")}`;
@@ -29,42 +24,6 @@ function wireBackButtons() {
   });
 }
 
-async function getCurrentUser() {
-  try {
-    await syncAuthState();
-
-    const liveUser = currentUser();
-    if (liveUser) return liveUser;
-
-    const liveSession = getAuthSession();
-    if (liveSession?.user) return liveSession.user;
-
-    const supabase = await getSupabase();
-    const { data } = await supabase.auth.getSession().catch(() => ({ data: null }));
-    if (data?.session?.user) {
-      return data.session.user;
-    }
-
-    return null;
-  } catch (error) {
-    console.warn("getCurrentUser failed:", error);
-    return null;
-  }
-}
-
-async function getStableUser() {
-  for (let attempt = 0; attempt < AUTH_RETRY_COUNT; attempt += 1) {
-    const user = await getCurrentUser();
-    if (user) return user;
-
-    if (attempt < AUTH_RETRY_COUNT - 1) {
-      await sleep(AUTH_RETRY_DELAY_MS);
-    }
-  }
-
-  return null;
-}
-
 function wireLogoutButtons() {
   document.querySelectorAll("[data-shell-logout]").forEach((link) => {
     if (link.dataset.bound === "true") return;
@@ -79,15 +38,14 @@ function wireLogoutButtons() {
 
 function wireUserLinks(user) {
   document.querySelectorAll("[data-shell-userlink]").forEach((link) => {
-    link.hidden = false;
-    link.textContent = user?.user_metadata?.full_name || user?.email || "Profile";
-    link.href = "profile.html";
-  });
-}
+    if (!user) {
+      link.hidden = true;
+      return;
+    }
 
-function wireGuestLinks() {
-  document.querySelectorAll("[data-shell-userlink]").forEach((link) => {
-    link.hidden = true;
+    link.hidden = false;
+    link.textContent = user.fullName || user.email || "Profile";
+    link.href = "profile.html";
   });
 }
 
@@ -115,7 +73,7 @@ function wireTopbarAuth(user) {
 
   const name = document.createElement("span");
   name.className = "topbar-auth-name";
-  name.textContent = user.user_metadata?.full_name || user.email || "User";
+  name.textContent = user.fullName || user.email || "User";
 
   const logoutBtn = document.createElement("button");
   logoutBtn.type = "button";
@@ -167,11 +125,11 @@ function wireSidebarControls() {
   }
 
   if (sidebar) {
-    sidebar.querySelectorAll("a").forEach((link) => {
-      if (link.dataset.bound === "true") return;
-      link.dataset.bound = "true";
+    sidebar.querySelectorAll("a, button").forEach((item) => {
+      if (item.dataset.bound === "true") return;
+      item.dataset.bound = "true";
 
-      link.addEventListener("click", () => {
+      item.addEventListener("click", () => {
         setSidebarOpen(false);
       });
     });
@@ -182,22 +140,14 @@ async function renderShellState() {
   wireBackButtons();
   wireSidebarControls();
 
-  const user = await getStableUser();
+  await syncAuthState();
+  const user = await waitForAuthUser(900);
 
   if (!user) {
-    await sleep(250);
-    const retryUser = await getStableUser();
-    if (!retryUser) {
-      wireGuestLinks();
-      wireTopbarAuth(null);
-      window.location.replace(getLoginUrl());
-      return null;
-    }
-
-    wireUserLinks(retryUser);
-    wireLogoutButtons();
-    wireTopbarAuth(retryUser);
-    return retryUser;
+    wireUserLinks(null);
+    wireTopbarAuth(null);
+    window.location.replace(getLoginUrl());
+    return null;
   }
 
   wireUserLinks(user);
