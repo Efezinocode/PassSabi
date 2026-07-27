@@ -219,6 +219,7 @@ async function initLogin() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     clearNotice(notice);
 
     const email = $("loginEmail")?.value?.trim();
@@ -237,26 +238,30 @@ async function initLogin() {
 
     setBusy(btn, true, "Logging in...");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setBusy(btn, false);
-
-    if (error) {
-      showNotice(notice, error.message, "error");
-      return;
-    }
-
-    persistAuthState(data?.session || null);
-
     try {
-      if (rememberMe) localStorage.setItem(REMEMBER_ME_KEY, "true");
-      else localStorage.removeItem(REMEMBER_ME_KEY);
-    } catch {}
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    window.location.replace(getNextUrl(USER_CHAT_PAGE));
+      if (error) {
+        showNotice(notice, error.message, "error");
+        return;
+      }
+
+      persistAuthState(data?.session || null);
+
+      try {
+        if (rememberMe) localStorage.setItem(REMEMBER_ME_KEY, "true");
+        else localStorage.removeItem(REMEMBER_ME_KEY);
+      } catch {}
+
+      window.location.replace(getNextUrl(USER_CHAT_PAGE));
+    } catch (error) {
+      showNotice(notice, error?.message || "Login failed. Try again.", "error");
+    } finally {
+      setBusy(btn, false);
+    }
   });
 }
 
@@ -270,6 +275,7 @@ async function initSignup() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     clearNotice(notice);
 
     const fullName = $("fullName")?.value?.trim();
@@ -304,34 +310,38 @@ async function initSignup() {
 
     setBusy(btn, true, "Creating account...");
 
-    const redirectTo = getRedirectUrl(
-      `${LOGIN_PAGE}?message=${encodeURIComponent("Check your email to verify your account.")}`
-    );
+    try {
+      const redirectTo = getRedirectUrl(
+        `${LOGIN_PAGE}?message=${encodeURIComponent("Check your email to verify your account.")}`
+      );
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectTo,
-        data: { full_name: fullName },
-      },
-    });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectTo,
+          data: { full_name: fullName },
+        },
+      });
 
-    setBusy(btn, false);
+      if (error) {
+        showNotice(notice, error.message, "error");
+        return;
+      }
 
-    if (error) {
-      showNotice(notice, error.message, "error");
-      return;
+      persistAuthState(data?.session || null);
+
+      if (data?.session) {
+        window.location.replace(getNextUrl(USER_CHAT_PAGE));
+        return;
+      }
+
+      showNotice(notice, "Account created. Check your email to verify your account.", "success");
+    } catch (error) {
+      showNotice(notice, error?.message || "Signup failed. Try again.", "error");
+    } finally {
+      setBusy(btn, false);
     }
-
-    persistAuthState(data?.session || null);
-
-    if (data?.session) {
-      window.location.replace(getNextUrl(USER_CHAT_PAGE));
-      return;
-    }
-
-    showNotice(notice, "Account created. Check your email to verify your account.", "success");
   });
 }
 
@@ -345,6 +355,7 @@ async function initForgotPassword() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     clearNotice(notice);
 
     const email = $("forgotEmail")?.value?.trim();
@@ -360,18 +371,22 @@ async function initForgotPassword() {
 
     setBusy(btn, true, "Sending reset link...");
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getRedirectUrl(`${RESET_PAGE}?email=${encodeURIComponent(email)}`),
-    });
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: getRedirectUrl(`${RESET_PAGE}?email=${encodeURIComponent(email)}`),
+      });
 
-    setBusy(btn, false);
+      if (error) {
+        showNotice(notice, error.message, "error");
+        return;
+      }
 
-    if (error) {
-      showNotice(notice, error.message, "error");
-      return;
+      showNotice(notice, "Password reset link sent. Check your email.", "success");
+    } catch (error) {
+      showNotice(notice, error?.message || "Reset failed. Try again.", "error");
+    } finally {
+      setBusy(btn, false);
     }
-
-    showNotice(notice, "Password reset link sent. Check your email.", "success");
   });
 }
 
@@ -385,6 +400,7 @@ async function initResetPassword() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     clearNotice(notice);
 
     const password = $("newPassword")?.value || "";
@@ -402,45 +418,61 @@ async function initResetPassword() {
 
     setBusy(btn, true, "Updating password...");
 
-    const { error } = await supabase.auth.updateUser({ password });
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
 
-    setBusy(btn, false);
+      if (error) {
+        showNotice(notice, error.message, "error");
+        return;
+      }
 
-    if (error) {
-      showNotice(notice, error.message, "error");
-      return;
+      showNotice(notice, "Password updated. Redirecting to login...", "success");
+      setTimeout(() => window.location.replace(LOGIN_PAGE), 900);
+    } catch (error) {
+      showNotice(notice, error?.message || "Password update failed. Try again.", "error");
+    } finally {
+      setBusy(btn, false);
     }
-
-    showNotice(notice, "Password updated. Redirecting to login...", "success");
-    setTimeout(() => window.location.replace(LOGIN_PAGE), 900);
   });
 }
 
 async function bootstrapAuth() {
-  await ensureAuthReady();
-
   bindPasswordToggleButtons();
 
-  if (await redirectIfAlreadyLoggedIn()) return;
+  // Bind forms immediately so the page never falls back to a normal refresh submit.
+  const name = pageName();
+  if (name === LOGIN_PAGE) initLogin();
+  if (name === SIGNUP_PAGE) initSignup();
+  if (name === FORGOT_PAGE) initForgotPassword();
+  if (name === RESET_PAGE) initResetPassword();
 
-  if (pageName() === LOGIN_PAGE) initLogin();
-  if (pageName() === SIGNUP_PAGE) initSignup();
-  if (pageName() === FORGOT_PAGE) initForgotPassword();
-  if (pageName() === RESET_PAGE) initResetPassword();
+  // Do auth checks after the forms are safely wired.
+  ensureAuthReady()
+    .then(async () => {
+      if (await redirectIfAlreadyLoggedIn()) return;
+    })
+    .catch((error) => {
+      console.warn("Auth bootstrap failed:", error);
+    });
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
   if (bootstrapped) return;
   bootstrapped = true;
-  await bootstrapAuth();
+
+  bootstrapAuth().catch((error) => {
+    console.warn("Auth bootstrap crashed:", error);
+  });
 });
 
-window.addEventListener("pageshow", async () => {
-  await ensureAuthReady();
+window.addEventListener("pageshow", () => {
+  ensureAuthReady().catch((error) => {
+    console.warn("Auth pageshow failed:", error);
+  });
 });
 
 ensureAuthReady().catch((error) => {
-  console.warn("Auth bootstrap failed:", error);
+  console.warn("Auth preflight failed:", error);
 });
 
 export {
