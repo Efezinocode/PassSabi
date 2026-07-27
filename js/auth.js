@@ -5,7 +5,6 @@ const SIGNUP_PAGE = "signup.html";
 const FORGOT_PAGE = "forgot-password.html";
 const RESET_PAGE = "reset-password.html";
 const USER_CHAT_PAGE = "user-chat.html";
-const PROFILE_PAGE = "profile.html";
 
 const AUTH_SESSION_KEYS = ["passsabi_auth_session_v2", "passsabi_session_v1"];
 const AUTH_USER_KEYS = ["passsabi_auth_user_v2", "passsabi_user_v1"];
@@ -230,7 +229,7 @@ async function syncAuthState() {
       const { data: userData } = await supabase.auth.getUser();
       if (userData?.user) user = userData.user;
     } catch {
-      // if user fetch fails, keep session.user
+      // keep session.user
     }
 
     setAuthState(session, user);
@@ -345,13 +344,8 @@ async function clearSession(redirectTo = null) {
   }
 
   setAuthState(null, null);
-
-  try {
-    writeStorage(AUTH_SESSION_KEYS, null);
-    writeStorage(AUTH_USER_KEYS, null);
-  } catch {
-    // ignore
-  }
+  writeStorage(AUTH_SESSION_KEYS, null);
+  writeStorage(AUTH_USER_KEYS, null);
 
   if (redirectTo) {
     window.location.replace(redirectTo);
@@ -480,7 +474,9 @@ async function initSignup() {
             full_name: fullName,
             name: fullName,
           },
-          emailRedirectTo: getRedirectUrl(`${LOGIN_PAGE}?message=${encodeURIComponent("Check your email to verify your account.")}`),
+          emailRedirectTo: getRedirectUrl(
+            `${LOGIN_PAGE}?message=${encodeURIComponent("Check your email to verify your account.")}`
+          ),
         },
       });
 
@@ -503,7 +499,11 @@ async function initSignup() {
       );
 
       setTimeout(() => {
-        window.location.replace(`${LOGIN_PAGE}?email=${encodeURIComponent(email)}&message=${encodeURIComponent("Check your email to verify your account.")}`);
+        window.location.replace(
+          `${LOGIN_PAGE}?email=${encodeURIComponent(email)}&message=${encodeURIComponent(
+            "Check your email to verify your account."
+          )}`
+        );
       }, 1100);
     } catch (error) {
       showNotice(notice, error?.message || "Signup failed. Try again.", "error");
