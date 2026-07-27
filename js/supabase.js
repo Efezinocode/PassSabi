@@ -1,4 +1,3 @@
-// js/supabase.js
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const SUPABASE_URL =
@@ -27,5 +26,4 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
-// Helpful for debugging in the browser console
 window.supabase = supabase;
