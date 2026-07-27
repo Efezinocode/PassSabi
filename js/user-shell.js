@@ -1,7 +1,7 @@
-import { currentUser, syncAuthState, clearSession } from "./auth.js";
+import { currentUser, syncAuthState, clearSession, getSupabase, getAuthSession } from "./auth.js";
 
-const AUTH_RETRY_COUNT = 3;
-const AUTH_RETRY_DELAY_MS = 120;
+const AUTH_RETRY_COUNT = 6;
+const AUTH_RETRY_DELAY_MS = 180;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -32,7 +32,20 @@ function wireBackButtons() {
 async function getCurrentUser() {
   try {
     await syncAuthState();
-    return currentUser();
+
+    const liveUser = currentUser();
+    if (liveUser) return liveUser;
+
+    const liveSession = getAuthSession();
+    if (liveSession?.user) return liveSession.user;
+
+    const supabase = await getSupabase();
+    const { data } = await supabase.auth.getSession().catch(() => ({ data: null }));
+    if (data?.session?.user) {
+      return data.session.user;
+    }
+
+    return null;
   } catch (error) {
     console.warn("getCurrentUser failed:", error);
     return null;
@@ -172,10 +185,19 @@ async function renderShellState() {
   const user = await getStableUser();
 
   if (!user) {
-    wireGuestLinks();
-    wireTopbarAuth(null);
-    window.location.replace(getLoginUrl());
-    return null;
+    await sleep(250);
+    const retryUser = await getStableUser();
+    if (!retryUser) {
+      wireGuestLinks();
+      wireTopbarAuth(null);
+      window.location.replace(getLoginUrl());
+      return null;
+    }
+
+    wireUserLinks(retryUser);
+    wireLogoutButtons();
+    wireTopbarAuth(retryUser);
+    return retryUser;
   }
 
   wireUserLinks(user);
