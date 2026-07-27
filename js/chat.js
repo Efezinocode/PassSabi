@@ -656,16 +656,17 @@ function initChatApp() {
     refreshAll();
   });
 
-  window.addEventListener("pageshow", async () => {
-    await syncAuthState().catch(() => {});
+  window.addEventListener("passsabi:auth-changed", () => {
+    syncAuthState().catch(() => {});
     loadData();
     refreshAll();
   });
-  
 
-  const input = getChatInput();
-  if (input) autoResizeInput(input);
-  scrollToBottom(getChatBox());
+  window.addEventListener("pageshow", () => {
+    syncAuthState().catch(() => {});
+    loadData();
+    refreshAll();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", initChatApp);
