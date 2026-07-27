@@ -259,29 +259,21 @@ function loadData() {
 
 function bindSidebarShell() {
   const menuBtn = getMenuButton();
+  const sidebar = getSidebar();
   const backdrop = getBackdrop();
-  const newChatBtn = $("#newChatBtn");
 
-  if (menuBtn) {
+  if (menuBtn && menuBtn.dataset.bound !== "true") {
+    menuBtn.dataset.bound = "true";
     menuBtn.addEventListener("click", () => {
-      const sidebar = getSidebar();
-      if (!sidebar) return;
-      if (sidebar.classList.contains("open")) closeSidebarPanel();
+      const isOpen = sidebar?.classList.contains("open");
+      if (isOpen) closeSidebarPanel();
       else openSidebarPanel();
     });
   }
 
-  if (backdrop) {
+  if (backdrop && backdrop.dataset.bound !== "true") {
+    backdrop.dataset.bound = "true";
     backdrop.addEventListener("click", closeSidebarPanel);
-  }
-
-  if (newChatBtn && newChatBtn.dataset.bound !== "true") {
-    newChatBtn.dataset.bound = "true";
-    newChatBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      createNewChat();
-      closeSidebarPanel();
-    });
   }
 
   document.addEventListener("keydown", (e) => {
@@ -290,26 +282,26 @@ function bindSidebarShell() {
 }
 
 function bindNewChatButtons() {
-  $$(NEW_CHAT_SELECTORS).forEach((btn) => {
+  document.querySelectorAll(NEW_CHAT_SELECTORS).forEach((btn) => {
     if (btn.dataset.bound === "true") return;
     btn.dataset.bound = "true";
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
+    btn.addEventListener("click", () => {
       createNewChat();
       closeSidebarPanel();
     });
   });
 }
 
-function setInputValue(v) {
+function readInputValue() {
   const input = getChatInput();
-  if (!input) return;
-  input.value = v;
-  autoResizeInput(input);
+  return String(input?.value || "").trim();
 }
 
-function readInputValue() {
-  return String(getChatInput()?.value || "").trim();
+function setInputValue(value = "") {
+  const input = getChatInput();
+  if (!input) return;
+  input.value = String(value || "");
+  autoResizeInput(input);
 }
 
 function showTyping() {
@@ -574,8 +566,10 @@ function bindLessonButtons() {
   });
 }
 
-function initChatApp() {
+async function initChatApp() {
+  await syncAuthState().catch(() => {});
   loadData();
+  refreshAll();
   wireBackButtons();
   bindSidebarShell();
   bindNewChatButtons();
@@ -650,14 +644,8 @@ function initChatApp() {
     },
   });
 
-    window.addEventListener("passsabi:auth-changed", async () => {
+  window.addEventListener("passsabi:auth-changed", async () => {
     await syncAuthState().catch(() => {});
-    loadData();
-    refreshAll();
-  });
-
-  window.addEventListener("passsabi:auth-changed", () => {
-    syncAuthState().catch(() => {});
     loadData();
     refreshAll();
   });
