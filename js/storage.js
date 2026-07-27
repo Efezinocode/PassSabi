@@ -1,9 +1,10 @@
+import { currentUser } from "./auth.js";
+
 // js/storage.js
 const STORAGE_KEY = "passsabi_chat_sessions_v1";
 const CURRENT_CHAT_KEY = "passsabi_current_chat_id_v1";
 const LEGACY_MESSAGES_KEY = "passsabi_messages_v1";
 const MEMORY_KEY = "passsabi_memory_v1";
-const AUTH_USER_KEY = "passsabi_user_v1";
 
 function safeJsonParse(value, fallback = null) {
   try {
@@ -53,13 +54,8 @@ function capText(value, max = 120) {
   return text.length > max ? `${text.slice(0, max).trim()}…` : text;
 }
 
-function readStoredUser() {
-  const user = safeJsonParse(safeStorageGet(localStorage, AUTH_USER_KEY), null);
-  return user && typeof user === "object" ? user : null;
-}
-
 export function getActiveUserId() {
-  return String(readStoredUser()?.id || "").trim();
+  return String(currentUser()?.id || "").trim();
 }
 
 export function isLoggedIn() {
@@ -629,11 +625,10 @@ export function getStorageKeys() {
     CURRENT_CHAT_KEY,
     LEGACY_MESSAGES_KEY,
     MEMORY_KEY,
-    AUTH_USER_KEY,
     scoped: {
       sessions: scopedSessionKey(),
       currentChat: scopedCurrentChatKey(),
       memory: scopedMemoryKey(),
     },
-  }; 
+  };
 }
