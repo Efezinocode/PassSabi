@@ -1,4 +1,3 @@
-// js/site-shell.js
 import { currentUser, clearSession, syncAuthState } from "./auth.js";
 
 function wireLogoutButtons() {
@@ -8,8 +7,7 @@ function wireLogoutButtons() {
 
     link.addEventListener("click", async (e) => {
       e.preventDefault();
-      await clearSession("index.html");
-      window.location.href = "index.html?message=You have been logged out.";
+      await clearSession("index.html?message=You have been logged out.");
     });
   });
 }
@@ -23,14 +21,16 @@ function wireProfileLinks(user) {
   });
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+async function renderShellState() {
   await syncAuthState();
   wireLogoutButtons();
   wireProfileLinks(currentUser());
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await renderShellState();
 });
 
 window.addEventListener("pageshow", async () => {
-  await syncAuthState();
-  wireLogoutButtons();
-  wireProfileLinks(currentUser());
+  await renderShellState();
 });
