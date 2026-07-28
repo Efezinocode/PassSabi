@@ -1,6 +1,118 @@
 // api/chat.js
 const { generateReply, toBool } = require("./providers.js");
 
+// ---------------------------------------------------------------------
+// Basic abuse controls
+// ---------------------------------------------------------------------
+// This endpoint is intentionally reachable without login, because the
+// app has a "Start Free Chat" guest mode — so we can't just require a
+// session. Instead we layer a few cheap checks: an Origin allowlist on
+// POST requests (blocks random curl/script abuse of the kind the README
+// itself showed as a copy-pasteable example), a best-effort rate limit
+// per IP, and hard clamps on every knob a client can influence.
+//
+// NOTE: the rate limiter below is in-memory and lives only for the life
+// of one warm serverless instance — it resets on cold start and is NOT
+// shared across concurrent instances. That's a reasonable first line of
+// defense against casual abuse, but for real production-grade
+// protection, back this with a durable store (Vercel KV, Upstash Redis,
+// or a Supabase table keyed by IP/user) instead.
+// ---------------------------------------------------------------------
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const rateLimitBuckets = new Map();
+
+const PROVIDER_ALLOWLIST = ["xai", "groq", "gemini", "openai"];
+const MAX_MESSAGES = 40;
+const MAX_TOTAL_CHARS = 12000;
+const MAX_SYSTEM_PROMPT_CHARS = 4000;
+
+function getEnv(name, fallback = "") {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket?.remoteAddress || "unknown";
+}
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(ip);
+
+  if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
+    rateLimitBuckets.set(ip, { windowStart: now, count: 1 });
+    return false;
+  }
+
+  bucket.count += 1;
+  return bucket.count > RATE_LIMIT_MAX_REQUESTS;
+}
+
+// Keeps the bucket map from growing forever on a long-lived warm instance.
+function cleanupRateLimitBuckets() {
+  const now = Date.now();
+  for (const [ip, bucket] of rateLimitBuckets) {
+    if (now - bucket.windowStart > RATE_LIMIT_WINDOW_MS * 5) {
+      rateLimitBuckets.delete(ip);
+    }
+  }
+}
+
+function getAllowedOrigins() {
+  const configured = getEnv("ALLOWED_ORIGINS", "");
+  const fromEnv = configured
+    ? configured.split(",").map((o) => o.trim()).filter(Boolean)
+    : [];
+
+  const vercelUrl = getEnv("VERCEL_URL", "");
+  const currentDeployment = vercelUrl ? `https://${vercelUrl}` : "";
+
+  return [
+    ...fromEnv,
+    currentDeployment,
+    "https://passsabi.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+  ].filter(Boolean);
+}
+
+// Strict on purpose: a real browser fetch() from our own frontend always
+// sends a matching Origin header on POST, so this only blocks requests
+// that didn't come from the app itself (curl, other sites, etc).
+function isAllowedOrigin(req) {
+  const origin = req.headers.origin || "";
+  const referer = req.headers.referer || req.headers.referrer || "";
+  const allowed = getAllowedOrigins();
+
+  return allowed.some(
+    (allowedOrigin) =>
+      (origin && origin === allowedOrigin) ||
+      (referer && referer.startsWith(allowedOrigin))
+  );
+}
+
+function getQueryParam(req, key) {
+  if (req.query && typeof req.query[key] === "string") return req.query[key];
+  try {
+    const url = new URL(req.url, "http://localhost");
+    return url.searchParams.get(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function clamp(value, min, max, fallback) {
+  const num = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return Math.min(max, Math.max(min, num));
+}
+
 function json(res, status, data) {
   return res.status(status).json(data);
 }
@@ -110,12 +222,50 @@ async function streamReply(res, text) {
 }
 
 module.exports = async function handler(req, res) {
+  cleanupRateLimitBuckets();
+  const ip = getClientIp(req);
+
   if (req.method === "GET") {
-    return json(res, 200, {
-      ok: true,
-      service: "PassSabi AI API",
-      status: "healthy",
-    });
+    const message = getQueryParam(req, "message");
+
+    if (!message.trim()) {
+      return json(res, 200, {
+        ok: true,
+        service: "PassSabi AI API",
+        status: "healthy",
+      });
+    }
+
+    // Debug shortcut described in the README: GET /api/chat?message=hello
+    // Off by default in production — set ENABLE_DEBUG_GET=true (dev/local
+    // only) to turn it on. This keeps it from being a free, unmetered,
+    // no-Origin-check way to hit paid providers by just typing a URL.
+    if (!toBool(getEnv("ENABLE_DEBUG_GET"), false)) {
+      return json(res, 403, {
+        ok: false,
+        error:
+          "The GET debug shortcut is disabled. Set ENABLE_DEBUG_GET=true " +
+          "in your environment (development only) to use it.",
+      });
+    }
+
+    if (isRateLimited(ip)) {
+      return json(res, 429, { ok: false, error: "Too many requests. Please slow down." });
+    }
+
+    try {
+      const result = await generateReply({
+        messages: [{ role: "user", content: message.trim().slice(0, MAX_TOTAL_CHARS) }],
+        provider: "xai",
+        temperature: 0.7,
+        maxTokens: 400,
+      });
+
+      return json(res, 200, { ok: true, provider: result.provider, text: result.text });
+    } catch (error) {
+      console.error("PassSabi AI debug GET error:", error);
+      return json(res, 503, { ok: false, error: "PassSabi AI is busy right now." });
+    }
   }
 
   if (req.method !== "POST") {
@@ -125,23 +275,36 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  if (!isAllowedOrigin(req)) {
+    return json(res, 403, {
+      ok: false,
+      error: "Requests must come from the PassSabi AI app.",
+    });
+  }
+
+  if (isRateLimited(ip)) {
+    return json(res, 429, {
+      ok: false,
+      error: "Too many requests. Please wait a moment and try again.",
+    });
+  }
+
   try {
     const body = parseBody(req);
-    const messages = normalizeMessages(body);
+    const messages = normalizeMessages(body).slice(-MAX_MESSAGES);
 
     const systemPrompt =
-      typeof body.systemPrompt === "string" ? body.systemPrompt : "";
+      typeof body.systemPrompt === "string"
+        ? body.systemPrompt.slice(0, MAX_SYSTEM_PROMPT_CHARS)
+        : "";
 
-    const provider =
-      typeof body.provider === "string" && body.provider.trim()
-        ? body.provider.trim().toLowerCase()
-        : "xai";
+    const requestedProvider = String(body.provider || "").trim().toLowerCase();
+    const provider = PROVIDER_ALLOWLIST.includes(requestedProvider)
+      ? requestedProvider
+      : "xai";
 
-    const temperature =
-      typeof body.temperature === "number" ? body.temperature : 0.7;
-
-    const maxTokens =
-      typeof body.maxTokens === "number" ? body.maxTokens : 900;
+    const temperature = clamp(body.temperature, 0, 1.2, 0.7);
+    const maxTokens = clamp(body.maxTokens, 64, 1200, 900);
 
     const webSearch = toBool(
       body.webSearch,
@@ -152,6 +315,14 @@ module.exports = async function handler(req, res) {
       return json(res, 400, {
         ok: false,
         error: "Please send a message and try again.",
+      });
+    }
+
+    const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+    if (totalChars > MAX_TOTAL_CHARS) {
+      return json(res, 400, {
+        ok: false,
+        error: "That conversation is too long for one request. Please start a new chat.",
       });
     }
 
