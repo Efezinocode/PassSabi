@@ -8,7 +8,37 @@
   <title>Login | PassSabi AI</title>
 
   <link rel="stylesheet" href="css/main.css" />
+  <script type="module" src="js/theme.js"></script>
   <link rel="stylesheet" href="css/auth.css" />
+  <script>
+    // Safety net: if js/auth.js (an ES module) fails to load — e.g. this
+    // page was opened as a local file:// instead of served over http(s),
+    // a CDN request was blocked, or the network drops — the browser would
+    // otherwise fall back to a native form submit, which just reloads this
+    // page with the form fields stuck in the URL and looks like nothing
+    // happened. This guarantees that never happens, and tells the user why.
+    document.addEventListener(
+      "submit",
+      function (e) {
+        if (e.target && e.target.tagName === "FORM") e.preventDefault();
+      },
+      true
+    );
+
+    window.addEventListener("DOMContentLoaded", function () {
+      setTimeout(function () {
+        if (window.PassSabiAuth) return; // js/auth.js loaded and ran fine
+        var host = document.querySelector(".auth-body") || document.body;
+        var banner = document.createElement("div");
+        banner.className = "notice show error";
+        banner.textContent =
+          "This page couldn't load its app script, so the form can't submit. " +
+          "Make sure you're opening this over http(s):// (not a local file), " +
+          "check your connection, then refresh.";
+        host.prepend(banner);
+      }, 3500);
+    });
+  </script>
   <script type="module" src="js/auth.js"></script>
 </head>
 <body class="auth-page">
@@ -120,7 +150,7 @@
         </div>
 
         <div class="auth-footer">
-          Don’t have an account? <a href="signup.html">Create one</a>
+          Don't have an account? <a href="signup.html">Create one</a>
         </div>
       </section>
     </section>
