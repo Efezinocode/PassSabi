@@ -416,6 +416,19 @@ async function attemptOpenAIProvider({
   throw finalError;
 }
 
+function buildMockReply(messages) {
+  const safeMessages = normalizeMessages(messages);
+  const lastUser = [...safeMessages].reverse().find((m) => m.role === "user");
+  const echoed = lastUser?.content ? lastUser.content.slice(0, 300) : "";
+
+  return [
+    "This is a mock PassSabi AI reply (MOCK_REPLY=true) — no provider quota was used.",
+    echoed ? `You said: "${echoed}"` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 async function generateReply({
   messages,
   systemPrompt = "",
@@ -424,6 +437,16 @@ async function generateReply({
   maxTokens = 900,
   webSearch = false,
 } = {}) {
+  if (toBool(getEnv("MOCK_REPLY"), false)) {
+    return {
+      ok: true,
+      provider: "mock",
+      model: "mock-reply",
+      text: buildMockReply(messages),
+      attempts: [],
+    };
+  }
+
   const order = buildProviderOrder(provider);
   const attempts = [];
   let lastError = null;
