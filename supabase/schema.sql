@@ -61,7 +61,19 @@ create policy "Users can insert their profile"
 create policy "Users can update their profile"
   on public.profiles
   for update
-  using (auth.uid() = id);
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
+-- The policy above only controls *which row* a user may touch, not
+-- *which columns*. Without a column-level restriction too, any logged-in
+-- user could PATCH their own row's `plan` or `coins` straight from
+-- devtools the moment those fields power a real feature. Lock self-service
+-- updates down to genuinely user-editable fields; `plan` and `coins`
+-- should only ever change via a service-role call (e.g. after a verified
+-- payment webhook or a server-side reward), which bypasses RLS entirely
+-- and isn't affected by this grant.
+revoke update on public.profiles from authenticated;
+grant update (full_name, avatar_url) on public.profiles to authenticated;
 
 create policy "Users can read their sessions"
   on public.chat_sessions
