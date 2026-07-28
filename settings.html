@@ -8,7 +8,10 @@
   <title>Settings | PassSabi AI</title>
 
   <link rel="stylesheet" href="css/main.css" />
+  <script type="module" src="js/theme.js"></script>
   <link rel="stylesheet" href="css/auth.css" />
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/settings.js"></script>
 </head>
 <body class="auth-page">
   <main class="auth-shell">
@@ -24,43 +27,51 @@
         </a>
 
         <h1 class="auth-title">Settings</h1>
-        <p class="auth-subtitle">This page is ready for theme, privacy, and app preferences.</p>
+        <p class="auth-subtitle">Theme applies everywhere. AI preferences apply once you're logged in.</p>
       </header>
 
       <div class="auth-body">
+        <div id="settingsNotice" class="notice" aria-live="polite"></div>
+
         <div class="profile-panel">
           <div class="profile-item">
-            <span>Signed in as</span>
-            <strong id="settingsUserName">—</strong>
-          </div>
-          <div class="profile-item">
-            <span>Email</span>
-            <strong id="settingsUserEmail">—</strong>
-          </div>
-          <div class="profile-item">
-            <span>Status</span>
-            <strong id="settingsUserStatus">—</strong>
+            <span>Theme</span>
+            <div class="row" style="gap: 8px;">
+              <button type="button" id="themeDarkBtn" class="secondary-btn" data-theme-option="dark">Dark</button>
+              <button type="button" id="themeLightBtn" class="secondary-btn" data-theme-option="light">Light</button>
+            </div>
           </div>
         </div>
 
-        <div class="profile-panel" style="margin-top:18px;">
+        <div class="profile-panel" id="accountSettingsPanel" hidden>
+          <h2 class="section-title">AI preferences</h2>
+
           <div class="profile-item">
-            <span>Theme</span>
-            <strong>Dark</strong>
+            <span>Preferred answer language</span>
+            <select id="languageSelect">
+              <option value="">Auto (match student)</option>
+              <option value="english">English</option>
+              <option value="yoruba">Yoruba</option>
+              <option value="igbo">Igbo</option>
+              <option value="hausa">Hausa</option>
+              <option value="pidgin">Pidgin</option>
+            </select>
           </div>
-          <div class="profile-item">
-            <span>Language</span>
-            <strong>English</strong>
-          </div>
-          <div class="profile-item">
-            <span>Notifications</span>
-            <strong>Off</strong>
-          </div>
+
+          <p class="note">
+            PassSabi AI also picks this up automatically from your chats — this sets it directly.
+          </p>
+
+          <button type="button" id="resetMemoryBtn" class="secondary-btn">Reset AI memory</button>
+        </div>
+
+        <div class="profile-panel" id="guestSettingsNote">
+          <p class="note">Log in to save AI preferences and reset what PassSabi AI remembers about you.</p>
+          <a class="secondary-btn" href="login.html?next=settings.html">Log in</a>
         </div>
 
         <div class="profile-actions" style="margin-top:18px;">
           <a class="secondary-btn" href="user-chat.html">Back to chat</a>
-          <button data-shell-logout class="auth-btn" type="button">Logout</button>
         </div>
       </div>
 
@@ -69,7 +80,5 @@
       </div>
     </section>
   </main>
-
-  <script type="module" src="js/user-shell.js"></script>
 </body>
 </html>
