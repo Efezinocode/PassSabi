@@ -1,0 +1,12 @@
+{
+  "name": "passsabi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PassSabi AI — AI study assistant (static frontend + Vercel serverless /api functions).",
+  "engines": {
+    "node": ">=18.x"
+  },
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
