@@ -12,21 +12,27 @@ export function extractSseData(block) {
 
 export async function streamChatReply({
   message,
+  messages,
+  systemPrompt = "",
   provider = "xai",
   signal,
   onChunk = () => {},
   onDone = () => {},
 }) {
+  // Prefer a real conversation history (array of {role, content}) so the
+  // model can see prior turns. `message` is kept as a fallback for any
+  // caller that still just wants to send a single string.
+  const payload = Array.isArray(messages) && messages.length
+    ? { messages, systemPrompt, provider }
+    : { message, systemPrompt, provider };
+
   const response = await fetch("/api/chat", {
     method: "POST",
     signal,
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      message,
-      provider,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
