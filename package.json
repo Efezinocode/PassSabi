@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "ci": "npm ci && npm run typecheck && npm run lint"
   },
   "dependencies": {
     "next": "14.0.0",
